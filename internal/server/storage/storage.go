@@ -4,34 +4,58 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 )
 
 type Gauge float64
 type Counter int64
 
 type Storager interface {
+	Len() int
 	Write(key, value string) error
 	Read(key string) (string, error)
+	Delete(key string) (string, bool)
 	GetSchemaDump() map[string]string
 }
 
-// MemoryRepo структура
 type MemoryRepo struct {
 	db map[string]string
+	*sync.RWMutex
 }
 
-func NewMemoryRepo() MemoryRepo {
-	return MemoryRepo{
-		db: make(map[string]string),
+func NewMemoryRepo() *MemoryRepo {
+	return &MemoryRepo{
+		db:      make(map[string]string),
+		RWMutex: &sync.RWMutex{},
 	}
 }
 
+func (m *MemoryRepo) Len() int {
+	m.RLock()
+	defer m.RUnlock()
+	return len(m.db)
+}
+
 func (m MemoryRepo) Write(key, value string) error {
+	m.Lock()
+	defer m.Unlock()
 	m.db[key] = value
 	return nil
 }
 
+func (m *MemoryRepo) Delete(key string) (string, bool) {
+	m.Lock()
+	defer m.Unlock()
+	oldValue, ok := m.db[key]
+	if ok {
+		delete(m.db, key)
+	}
+	return oldValue, ok
+}
+
 func (m MemoryRepo) Read(key string) (string, error) {
+	m.RLock()
+	defer m.RUnlock()
 	value, err := m.db[key]
 	if !err {
 		return "", errors.New("Значение по ключу не найдено, ключ: " + key)
@@ -44,12 +68,10 @@ func (m MemoryRepo) GetSchemaDump() map[string]string {
 	return m.db
 }
 
-// MemStatsMemoryRepo - репо для приходящей статистики
 type MemStatsMemoryRepo struct {
 	storage Storager
 }
 
-// Создание MemStatsMemoryRepo с дефолтными значениями
 func NewMemStatsMemoryRepo() MemStatsMemoryRepo {
 	var memStatsStorage MemStatsMemoryRepo
 	memStatsStorage.storage = NewMemoryRepo()
@@ -97,13 +119,11 @@ func (memStatsStorage MemStatsMemoryRepo) UpdateGaugeValue(key string, value flo
 }
 
 func (memStatsStorage MemStatsMemoryRepo) UpdateCounterValue(key string, value int64) error {
-	//Чтение старого значения
 	oldValue, err := memStatsStorage.storage.Read(key)
 	if err != nil {
 		oldValue = "0"
 	}
 
-	//Конвертация в число
 	oldValueInt, err := strconv.ParseInt(oldValue, 10, 64)
 	if err != nil {
 		return errors.New("MemStats value is not int64")

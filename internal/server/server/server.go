@@ -17,7 +17,7 @@ type Server struct {
 	chiRouter chi.Router
 }
 
-func initRouter(memStatsStorage storage.MemStatsMemoryRepo) chi.Router {
+func newRouter(memStatsStorage storage.MemStatsMemoryRepo) chi.Router {
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
@@ -28,6 +28,10 @@ func initRouter(memStatsStorage storage.MemStatsMemoryRepo) chi.Router {
 	//Маршруты
 	router.Get("/", func(writer http.ResponseWriter, request *http.Request) {
 		handlers.PrintStatsValues(writer, request, memStatsStorage)
+	})
+
+	router.Get("/value/{statType}/{statName}", func(writer http.ResponseWriter, request *http.Request) {
+		handlers.PrintStatValue(writer, request, memStatsStorage)
 	})
 
 	router.Route("/update", func(router chi.Router) {
@@ -47,7 +51,7 @@ func initRouter(memStatsStorage storage.MemStatsMemoryRepo) chi.Router {
 
 func (server *Server) Run() {
 	memStatsStorage := storage.NewMemStatsMemoryRepo()
-	server.chiRouter = initRouter(memStatsStorage)
+	server.chiRouter = newRouter(memStatsStorage)
 
 	fullHostAddr := fmt.Sprintf("%v:%v", config.Hostname, config.Port)
 	log.Fatal(http.ListenAndServe(fullHostAddr, server.chiRouter))

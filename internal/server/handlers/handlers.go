@@ -26,8 +26,8 @@ func UpdateGaugePost(rw http.ResponseWriter, request *http.Request, memStatsStor
 		return
 	}
 
-	fmt.Println("Update gauge:")
-	fmt.Printf("%v: %v\n\n", statName, statValue)
+	log.Println("Update gauge:")
+	log.Printf("%v: %v\n", statName, statValue)
 	rw.WriteHeader(http.StatusOK)
 	rw.Write([]byte("Ok"))
 }
@@ -68,6 +68,7 @@ func PrintStatsValues(rw http.ResponseWriter, request *http.Request, memStatsSto
 			<title></title>
 			</head>
 			<body>
+				<h3 class="keyvalues-header">All values: </h3>
 				%v
 			</body>
 		</html>`
@@ -80,4 +81,16 @@ func PrintStatsValues(rw http.ResponseWriter, request *http.Request, memStatsSto
 	htmlPage := fmt.Sprintf(htmlTemplate, keyValuesHTML)
 	rw.WriteHeader(http.StatusOK)
 	rw.Write([]byte(htmlPage))
+}
+
+func PrintStatValue(rw http.ResponseWriter, request *http.Request, memStatsStorage storage.MemStatsMemoryRepo) {
+	statName := chi.URLParam(request, "statName")
+	statValue, err := memStatsStorage.ReadValue(statName)
+	if err != nil {
+		rw.WriteHeader(http.StatusNotFound)
+		rw.Write([]byte("Unknown statName"))
+	}
+
+	rw.WriteHeader(http.StatusOK)
+	rw.Write([]byte(statValue))
 }
