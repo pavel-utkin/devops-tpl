@@ -19,14 +19,14 @@ type AppHTTP struct {
 	client          *resty.Client
 }
 
-func NewHTTPClient() *AppHTTP {
+func NewHTTPClient(clientRetryCount int, clientRetryWaitTime time.Duration, clientRetryMaxWaitTime time.Duration) *AppHTTP {
 	var app AppHTTP
 	client := resty.New()
 
 	client.
-		SetRetryCount(config.ClientRetryCount).
-		SetRetryWaitTime(config.ClientRetryWaitTime).
-		SetRetryMaxWaitTime(config.ClientRetryMaxWaitTime)
+		SetRetryCount(clientRetryCount).
+		SetRetryWaitTime(clientRetryWaitTime).
+		SetRetryMaxWaitTime(clientRetryMaxWaitTime)
 
 	app.client = client
 	return &app
@@ -61,12 +61,8 @@ func (app *AppHTTP) Run() {
 			}
 		case osSignal := <-signalChanel:
 			switch osSignal {
-			case syscall.SIGTERM:
-				log.Println("syscall: SIGTERM")
-			case syscall.SIGINT:
-				log.Println("syscall: SIGINT")
-			case syscall.SIGQUIT:
-				log.Println("syscall: SIGQUIT")
+			case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT:
+				log.Println("syscall: " + osSignal.String())
 			}
 			app.Stop()
 		}
@@ -75,7 +71,6 @@ func (app *AppHTTP) Run() {
 
 func (app *AppHTTP) Stop() {
 	app.isRun = false
-	os.Exit(1)
 }
 
 func (app *AppHTTP) IsRun() bool {

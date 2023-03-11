@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"github.com/go-resty/resty/v2"
 	"golang.org/x/sync/errgroup"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 )
 
-func oneStatUpload(httpClient *resty.Client, statType string, statName string, statValue string) error {
+func oneStatUpload(httpClient *resty.Client, statType, statName, statValue string) error {
 	resp, err := httpClient.R().
 		SetPathParams(map[string]string{
 			"host":  config.ServerHost,
@@ -27,7 +28,7 @@ func oneStatUpload(httpClient *resty.Client, statType string, statName string, s
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode() != 200 {
+	if resp.StatusCode() != http.StatusOK {
 		return errors.New("HTTP Status != 200")
 	}
 
@@ -49,6 +50,5 @@ func MemoryStatsUpload(httpClient *resty.Client, memoryStats statsreader.MemoryS
 		})
 	}
 
-	err := errorGroup.Wait()
-	return err
+	return errorGroup.Wait()
 }

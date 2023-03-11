@@ -15,7 +15,7 @@ func UpdateGaugePost(rw http.ResponseWriter, request *http.Request, memStatsStor
 	statValueInt, err := strconv.ParseFloat(statValue, 64)
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
-		rw.Write([]byte("Bad request"))
+		rw.Write([]byte("Bad request: " + err.Error()))
 		return
 	}
 
@@ -89,6 +89,7 @@ func PrintStatValue(rw http.ResponseWriter, request *http.Request, memStatsStora
 	if err != nil {
 		rw.WriteHeader(http.StatusNotFound)
 		rw.Write([]byte("Unknown statName"))
+		return
 	}
 
 	rw.WriteHeader(http.StatusOK)
