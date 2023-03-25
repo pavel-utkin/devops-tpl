@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-resty/resty/v2"
+	"golang.org/x/sync/errgroup"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
 )
 
-func oneStatUpload(httpClient *resty.Client, errorChan chan error, statType string, statName string, statValue string) {
+func oneStatUpload(httpClient *resty.Client, statType, statName, statValue string) error {
 	resp, err := httpClient.R().
 		SetPathParams(map[string]string{
 			"host":  config.ServerHost,
@@ -24,37 +26,29 @@ func oneStatUpload(httpClient *resty.Client, errorChan chan error, statType stri
 		Post("http://{host}:{port}/update/{type}/{name}/{value}")
 
 	if err != nil {
-		fmt.Println(err)
-		errorChan <- err
+		return err
 	}
-	if resp.StatusCode() != 200 {
-		errorChan <- errors.New("HTTP Status != 200")
+	if resp.StatusCode() != http.StatusOK {
+		return errors.New("HTTP Status != 200")
 	}
 
-	errorChan <- nil
+	return nil
 }
 
 func MemoryStatsUpload(httpClient *resty.Client, memoryStats statsreader.MemoryStatsDump) error {
 	reflectMemoryStats := reflect.ValueOf(memoryStats)
 	typeOfMemoryStats := reflectMemoryStats.Type()
-	errorChan := make(chan error)
-	defer close(errorChan)
+	errorGroup := new(errgroup.Group)
 
 	for i := 0; i < reflectMemoryStats.NumField(); i++ {
 		statName := typeOfMemoryStats.Field(i).Name
 		statValue := fmt.Sprintf("%v", reflectMemoryStats.Field(i).Interface())
 		statType := strings.Split(typeOfMemoryStats.Field(i).Type.String(), ".")[1]
 
-		go oneStatUpload(httpClient, errorChan, statType, statName, statValue)
+		errorGroup.Go(func() error {
+			return oneStatUpload(httpClient, statType, statName, statValue)
+		})
 	}
 
-	for i := 0; i < reflectMemoryStats.NumField(); i++ {
-		error := <-errorChan
-
-		if error != nil {
-			return error
-		}
-	}
-
-	return nil
+	return errorGroup.Wait()
 }

@@ -1,9 +1,8 @@
 package statsreader
 
 import (
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestRefresh(t *testing.T) {
