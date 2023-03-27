@@ -6,6 +6,6 @@ import (
 )
 
 func main() {
-	app := agent.NewHTTPClient(config.ClientRetryCount, config.ClientRetryWaitTime, config.ClientRetryMaxWaitTime)
+	app := agent.NewHTTPClient(config.AppConfig.HTTPClientConnection.RetryCount, config.AppConfig.HTTPClientConnection.RetryWaitTime, config.AppConfig.HTTPClientConnection.RetryMaxWaitTime)
 	app.Run()
 }

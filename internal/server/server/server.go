@@ -4,7 +4,6 @@ import (
 	"devops-tpl/internal/server/config"
 	"devops-tpl/internal/server/handlers"
 	"devops-tpl/internal/server/storage"
-	"fmt"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"log"
@@ -60,7 +59,5 @@ func newRouter(memStatsStorage storage.MemStatsMemoryRepo) chi.Router {
 func (server *Server) Run() {
 	memStatsStorage := storage.NewMemStatsMemoryRepo()
 	server.chiRouter = newRouter(memStatsStorage)
-
-	fullHostAddr := fmt.Sprintf("%v:%v", config.Hostname, config.Port)
-	log.Fatal(http.ListenAndServe(fullHostAddr, server.chiRouter))
+	log.Fatal(http.ListenAndServe(config.AppConfig.ServerAddr, server.chiRouter))
 }
