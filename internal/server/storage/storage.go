@@ -1,33 +1,62 @@
 package storage
 
 import (
+	"devops-tpl/internal/server/config"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
+	"log"
+	"os"
 	"sync"
+	"time"
 )
 
-type Gauge float64
-type Counter int64
+const syncUploadSymbol = time.Duration(0)
 
-type Storager interface {
-	Len() int
-	Write(key, value string) error
-	Read(key string) (string, error)
-	Delete(key string) (string, bool)
-	GetSchemaDump() map[string]string
+type MetricValue struct {
+	MType string   `json:"type" valid:"required,in(counter|gauge)"`
+	Delta *int64   `json:"delta,omitempty"`
+	Value *float64 `json:"value,omitempty"`
 }
 
+type Metric struct {
+	ID    string   `json:"id" valid:"required"`
+	MType string   `json:"type" valid:"required,in(counter|gauge)"`
+	Delta *int64   `json:"delta,omitempty"`
+	Value *float64 `json:"value,omitempty"`
+}
+
+func (metric MetricValue) GetStringValue() string {
+	switch metric.MType {
+	case "gauge":
+		return fmt.Sprintf("%v", *metric.Value)
+	case "counter":
+		return fmt.Sprintf("%v", *metric.Delta)
+	default:
+		return ""
+	}
+}
+
+type MetricStorager interface {
+	Len() int
+	Write(key string, value MetricValue) error
+	Read(key string) (MetricValue, error)
+	Delete(key string) (MetricValue, bool)
+	GetSchemaDump() map[string]MetricValue
+	Close() error
+}
+
+// MemoryRepo структура
 type MemoryRepo struct {
-	db map[string]string
+	db map[string]MetricValue
 	*sync.RWMutex
 }
 
-func NewMemoryRepo() *MemoryRepo {
+func NewMemoryRepo() (*MemoryRepo, error) {
 	return &MemoryRepo{
-		db:      make(map[string]string),
+		db:      make(map[string]MetricValue),
 		RWMutex: &sync.RWMutex{},
-	}
+	}, nil
 }
 
 func (m *MemoryRepo) Len() int {
@@ -36,14 +65,14 @@ func (m *MemoryRepo) Len() int {
 	return len(m.db)
 }
 
-func (m MemoryRepo) Write(key, value string) error {
+func (m MemoryRepo) Write(key string, value MetricValue) error {
 	m.Lock()
 	defer m.Unlock()
 	m.db[key] = value
 	return nil
 }
 
-func (m *MemoryRepo) Delete(key string) (string, bool) {
+func (m *MemoryRepo) Delete(key string) (MetricValue, bool) {
 	m.Lock()
 	defer m.Unlock()
 	oldValue, ok := m.db[key]
@@ -53,92 +82,201 @@ func (m *MemoryRepo) Delete(key string) (string, bool) {
 	return oldValue, ok
 }
 
-func (m MemoryRepo) Read(key string) (string, error) {
+func (m MemoryRepo) Read(key string) (MetricValue, error) {
 	m.RLock()
 	defer m.RUnlock()
 	value, err := m.db[key]
 	if !err {
-		return "", errors.New("Значение по ключу не найдено, ключ: " + key)
+		return MetricValue{}, errors.New("Значение по ключу не найдено, ключ: " + key)
 	}
 
 	return value, nil
 }
 
-func (m MemoryRepo) GetSchemaDump() map[string]string {
+func (m MemoryRepo) GetSchemaDump() map[string]MetricValue {
+	m.RLock()
+	defer m.RUnlock()
 	return m.db
 }
 
+func (m *MemoryRepo) Close() error {
+	return nil
+}
+
+// MemStatsMemoryRepo - репо для приходящей статистики
 type MemStatsMemoryRepo struct {
-	storage Storager
+	uploadMutex    *sync.RWMutex
+	gaugeStorage   MetricStorager
+	counterStorage MetricStorager
 }
 
 func NewMemStatsMemoryRepo() MemStatsMemoryRepo {
 	var memStatsStorage MemStatsMemoryRepo
-	memStatsStorage.storage = NewMemoryRepo()
+	var err error
 
-	memStatsStorage.storage.Write("Alloc", "0")
-	memStatsStorage.storage.Write("BuckHashSys", "0")
-	memStatsStorage.storage.Write("Frees", "0")
-	memStatsStorage.storage.Write("GCCPUFraction", "0")
-	memStatsStorage.storage.Write("GCSys", "0")
+	memStatsStorage.uploadMutex = &sync.RWMutex{}
+	memStatsStorage.gaugeStorage, err = NewMemoryRepo()
+	if err != nil {
+		panic("gaugeMemoryRepo init error")
+	}
+	memStatsStorage.counterStorage, err = NewMemoryRepo()
+	if err != nil {
+		panic("counterMemoryRepo init error")
+	}
 
-	memStatsStorage.storage.Write("HeapAlloc", "0")
-	memStatsStorage.storage.Write("HeapIdle", "0")
-	memStatsStorage.storage.Write("HeapInuse", "0")
-	memStatsStorage.storage.Write("HeapObjects", "0")
-	memStatsStorage.storage.Write("HeapReleased", "0")
-
-	memStatsStorage.storage.Write("HeapSys", "0")
-	memStatsStorage.storage.Write("LastGC", "0")
-	memStatsStorage.storage.Write("Lookups", "0")
-	memStatsStorage.storage.Write("MCacheInuse", "0")
-	memStatsStorage.storage.Write("MCacheSys", "0")
-
-	memStatsStorage.storage.Write("MSpanInuse", "0")
-	memStatsStorage.storage.Write("MSpanSys", "0")
-	memStatsStorage.storage.Write("Mallocs", "0")
-	memStatsStorage.storage.Write("NextGC", "0")
-	memStatsStorage.storage.Write("NumForcedGC", "0")
-
-	memStatsStorage.storage.Write("NumGC", "0")
-	memStatsStorage.storage.Write("OtherSys", "0")
-	memStatsStorage.storage.Write("PauseTotalNs", "0")
-	memStatsStorage.storage.Write("StackInuse", "0")
-	memStatsStorage.storage.Write("StackSys", "0")
-
-	memStatsStorage.storage.Write("Sys", "0")
-	memStatsStorage.storage.Write("TotalAlloc", "0")
-	memStatsStorage.storage.Write("PollCount", "0")
-	memStatsStorage.storage.Write("RandomValue", "0")
+	if config.AppConfig.Store.Interval != syncUploadSymbol {
+		memStatsStorage.IterativeUploadToFile()
+	}
 
 	return memStatsStorage
 }
 
-func (memStatsStorage MemStatsMemoryRepo) UpdateGaugeValue(key string, value float64) error {
-	return memStatsStorage.storage.Write(key, fmt.Sprintf("%v", value))
+func (memStatsStorage MemStatsMemoryRepo) Update(key string, newMetricValue MetricValue) error {
+	switch newMetricValue.MType {
+	case "gauge":
+		log.Println("update gauge")
+		if newMetricValue.Value == nil {
+			return errors.New("Metric Value is empty")
+		}
+		newMetricValue.Delta = nil
+
+		return memStatsStorage.updateGaugeValue(key, newMetricValue)
+	case "counter":
+		log.Println("update counter")
+		if newMetricValue.Delta == nil {
+			return errors.New("Metric Delta is empty")
+		}
+		newMetricValue.Value = nil
+
+		return memStatsStorage.updateCounterValue(key, newMetricValue)
+	default:
+		return errors.New("Metric type is not defined")
+	}
 }
 
-func (memStatsStorage MemStatsMemoryRepo) UpdateCounterValue(key string, value int64) error {
-	oldValue, err := memStatsStorage.storage.Read(key)
+func (memStatsStorage MemStatsMemoryRepo) updateGaugeValue(key string, newMetricValue MetricValue) error {
+	memStatsStorage.uploadMutex.Lock()
+	err := memStatsStorage.gaugeStorage.Write(key, newMetricValue)
+	memStatsStorage.uploadMutex.Unlock()
+
 	if err != nil {
-		oldValue = "0"
+		return err
 	}
 
-	oldValueInt, err := strconv.ParseInt(oldValue, 10, 64)
-	if err != nil {
-		return errors.New("MemStats value is not int64")
+	if config.AppConfig.Store.Interval == syncUploadSymbol {
+		return memStatsStorage.UploadToFile()
 	}
-
-	newValue := fmt.Sprintf("%v", oldValueInt+value)
-	memStatsStorage.storage.Write(key, newValue)
 
 	return nil
 }
 
-func (memStatsStorage MemStatsMemoryRepo) ReadValue(key string) (string, error) {
-	return memStatsStorage.storage.Read(key)
+func (memStatsStorage MemStatsMemoryRepo) updateCounterValue(key string, newMetricValue MetricValue) error {
+	//Чтение старого значения
+	oldMetricValue, err := memStatsStorage.ReadValue(key, "counter")
+	if err != nil {
+		var delta int64 = 0
+		oldMetricValue = MetricValue{
+			Delta: &delta,
+		}
+	}
+
+	newValue := *oldMetricValue.Delta + *newMetricValue.Delta
+	newMetricValue.Delta = &newValue
+
+	memStatsStorage.uploadMutex.Lock()
+	memStatsStorage.counterStorage.Write(key, newMetricValue)
+	memStatsStorage.uploadMutex.Unlock()
+
+	if config.AppConfig.Store.Interval == syncUploadSymbol {
+		return memStatsStorage.UploadToFile()
+	}
+
+	return nil
 }
 
-func (memStatsStorage MemStatsMemoryRepo) GetDBSchema() map[string]string {
-	return memStatsStorage.storage.GetSchemaDump()
+func (memStatsStorage MemStatsMemoryRepo) ReadValue(key string, metricType string) (MetricValue, error) {
+	log.Println("Read storage:")
+	log.Println(memStatsStorage.gaugeStorage.GetSchemaDump())
+	log.Println(memStatsStorage.counterStorage.GetSchemaDump())
+
+	switch metricType {
+	case "gauge":
+		return memStatsStorage.gaugeStorage.Read(key)
+	case "counter":
+		return memStatsStorage.counterStorage.Read(key)
+	default:
+		return MetricValue{}, errors.New("metricType not found")
+	}
+}
+
+func (memStatsStorage MemStatsMemoryRepo) UploadToFile() error {
+	memStatsStorage.uploadMutex.Lock()
+	defer memStatsStorage.uploadMutex.Unlock()
+	if config.AppConfig.Store.File == "" {
+		return nil
+	}
+
+	file, err := os.OpenFile(config.AppConfig.Store.File, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	allStates := memStatsStorage.GetAllMetrics()
+	json.NewEncoder(file).Encode(allStates)
+
+	return nil
+}
+
+func (memStatsStorage MemStatsMemoryRepo) IterativeUploadToFile() error {
+	tickerUpload := time.NewTicker(config.AppConfig.Store.Interval)
+
+	go func() {
+		for range tickerUpload.C {
+			memStatsStorage.UploadToFile()
+		}
+	}()
+
+	return nil
+}
+
+func (memStatsStorage MemStatsMemoryRepo) InitFromFile() {
+	file, err := os.OpenFile(config.AppConfig.Store.File, os.O_RDONLY|os.O_CREATE, 0777)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer file.Close()
+
+	var stateValues map[string]MetricValue
+	json.NewDecoder(file).Decode(&stateValues)
+
+	memStatsStorage.InitStateValues(stateValues)
+}
+
+func (memStatsStorage MemStatsMemoryRepo) InitStateValues(DBSchema map[string]MetricValue) {
+	for metricKey, metricValue := range DBSchema {
+		memStatsStorage.Update(metricKey, metricValue)
+	}
+}
+
+func (memStatsStorage MemStatsMemoryRepo) GetAllMetrics() map[string]MetricValue {
+	allMetrics := make(map[string]MetricValue)
+
+	for metricKey, metricValue := range memStatsStorage.gaugeStorage.GetSchemaDump() {
+		allMetrics[metricKey] = metricValue
+	}
+
+	for metricKey, metricValue := range memStatsStorage.counterStorage.GetSchemaDump() {
+		allMetrics[metricKey] = metricValue
+	}
+	return allMetrics
+}
+
+func (memStatsStorage MemStatsMemoryRepo) Close() error {
+	err := memStatsStorage.gaugeStorage.Close()
+	if err != nil {
+		return err
+	}
+	err = memStatsStorage.counterStorage.Close()
+
+	return err
 }

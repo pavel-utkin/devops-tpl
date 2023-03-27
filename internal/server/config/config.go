@@ -3,10 +3,16 @@ package config
 import (
 	"github.com/caarlos0/env/v6"
 	"log"
+	"time"
 )
 
 type Config struct {
-	ServerAddr string `env:"ADDRESS" envDefault:"127.0.0.1:8080"` //addr:port
+	ServerAddr string `env:"ADDRESS" envDefault:"127.0.0.1:8080"`
+	Store      struct {
+		Interval time.Duration `env:"STORE_INTERVAL" envDefault:"300s"`
+		File     string        `env:"STORE_FILE" envDefault:"/tmp/devops-metrics-db.json"`
+		Restore  bool          `env:"RESTORE" envDefault:"true"`
+	}
 }
 
 func LoadConfig() Config {
