@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"devops-tpl/internal/server/config"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -28,7 +29,7 @@ func TestMemoryRepoReadEmpty(t *testing.T) {
 }
 
 func TestUpdateCounterValue(t *testing.T) {
-	memStatsStorage := NewMemStatsMemoryRepo()
+	memStatsStorage := NewMemStatsMemoryRepo(config.StoreConfig{})
 
 	var startValue int64 = 7
 	var incrementValue int64 = 22

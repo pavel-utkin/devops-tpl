@@ -12,8 +12,9 @@ import (
 )
 
 type Server struct {
-	startTime time.Time
 	chiRouter chi.Router
+	config    config.Config
+	startTime time.Time
 }
 
 func newRouter(memStatsStorage storage.MemStatsMemoryRepo) chi.Router {
@@ -56,16 +57,19 @@ func newRouter(memStatsStorage storage.MemStatsMemoryRepo) chi.Router {
 	return router
 }
 
+func NewServer(config config.Config) *Server {
+	return &Server{
+		config: config,
+	}
+}
+
 func (server *Server) Run() {
-	memStatsStorage := storage.NewMemStatsMemoryRepo()
+	memStatsStorage := storage.NewMemStatsMemoryRepo(server.config.Store)
 	defer memStatsStorage.Close()
-	if config.AppConfig.Store.Restore {
+	if server.config.Store.Restore {
 		memStatsStorage.InitFromFile()
 	}
 	server.chiRouter = newRouter(memStatsStorage)
-	log.Println("Config:")
-	log.Println(config.AppConfig)
-	log.Println("Init storage:")
-	log.Println(memStatsStorage.GetAllMetrics())
-	log.Fatal(http.ListenAndServe(config.AppConfig.ServerAddr, server.chiRouter))
+
+	log.Fatal(http.ListenAndServe(server.config.ServerAddr, server.chiRouter))
 }

@@ -2,9 +2,8 @@ package agent
 
 import (
 	"devops-tpl/internal/agent/config"
-	"devops-tpl/internal/agent/requesthandler"
+	"devops-tpl/internal/agent/metricsuploader"
 	"devops-tpl/internal/agent/statsreader"
-	"github.com/go-resty/resty/v2"
 	"log"
 	"os"
 	"syscall"
@@ -12,23 +11,21 @@ import (
 )
 
 type AppHTTP struct {
-	isRun           bool
-	startTime       time.Time
-	lastRefreshTime time.Time
-	lastUploadTime  time.Time
-	client          *resty.Client
+	isRun   bool
+	timeLog struct {
+		startTime       time.Time
+		lastRefreshTime time.Time
+		lastUploadTime  time.Time
+	}
+	metricsUplader *metricsuploader.MetricsUplader
+	config         config.Config
 }
 
-func NewHTTPClient(clientRetryCount int, clientRetryWaitTime time.Duration, clientRetryMaxWaitTime time.Duration) *AppHTTP {
+func NewHTTPClient(config config.Config) *AppHTTP {
 	var app AppHTTP
-	client := resty.New()
+	app.config = config
+	app.metricsUplader = metricsuploader.NewMetricsUploader(app.config.HTTPClientConnection)
 
-	client.
-		SetRetryCount(clientRetryCount).
-		SetRetryWaitTime(clientRetryWaitTime).
-		SetRetryMaxWaitTime(clientRetryMaxWaitTime)
-
-	app.client = client
 	return &app
 }
 
@@ -36,23 +33,23 @@ func (app *AppHTTP) Run() {
 	var memStatistics statsreader.MemoryStatsDump
 	signalChanel := make(chan os.Signal, 1)
 
-	app.startTime = time.Now()
+	app.timeLog.startTime = time.Now()
 	app.isRun = true
 
-	tickerStatisticsRefresh := time.NewTicker(config.AppConfig.PollInterval)
-	tickerStatisticsUpload := time.NewTicker(config.AppConfig.ReportInterval)
+	tickerStatisticsRefresh := time.NewTicker(app.config.PollInterval)
+	tickerStatisticsUpload := time.NewTicker(app.config.ReportInterval)
 
 	for app.isRun {
 		select {
 		case timeTickerRefresh := <-tickerStatisticsRefresh.C:
 			log.Println("Refresh")
-			app.lastRefreshTime = timeTickerRefresh
+			app.timeLog.lastRefreshTime = timeTickerRefresh
 			memStatistics.Refresh()
 		case timeTickerUpload := <-tickerStatisticsUpload.C:
-			app.lastUploadTime = timeTickerUpload
+			app.timeLog.lastUploadTime = timeTickerUpload
 			log.Println("Upload")
 
-			err := requesthandler.MemoryStatsUpload(app.client, memStatistics)
+			err := app.metricsUplader.MemoryStatsUpload(memStatistics)
 			if err != nil {
 				log.Println("Error!")
 				log.Println(err)
