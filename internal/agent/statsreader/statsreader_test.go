@@ -6,10 +6,10 @@ import (
 )
 
 func TestRefresh(t *testing.T) {
-	var memStatistics MemoryStatsDump
-	memStatistics.Refresh()
-	memStatistics.Refresh()
-	memStatistics.Refresh()
+	var metricsDump MetricsDump
+	metricsDump.Refresh()
+	metricsDump.Refresh()
+	metricsDump.Refresh()
 
-	assert.Equal(t, 3, int(memStatistics.PollCount))
+	assert.Equal(t, 3, int(metricsDump.PollCount))
 }

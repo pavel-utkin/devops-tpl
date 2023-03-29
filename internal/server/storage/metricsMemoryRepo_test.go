@@ -12,7 +12,7 @@ func TestMemoryRepoRW(t *testing.T) {
 
 	var counterValueExpect int64 = 50
 	memoryRepo.Write("PollCount", MetricValue{
-		MType: "counter",
+		MType: MeticTypeCounter,
 		Delta: &counterValueExpect,
 	})
 	counterValueReal, err := memoryRepo.Read("PollCount")
@@ -29,21 +29,21 @@ func TestMemoryRepoReadEmpty(t *testing.T) {
 }
 
 func TestUpdateCounterValue(t *testing.T) {
-	memStatsStorage := NewMemStatsMemoryRepo(config.StoreConfig{})
+	metricsMemoryRepo := NewMetricsMemoryRepo(config.StoreConfig{})
 
 	var startValue int64 = 7
 	var incrementValue int64 = 22
-	err := memStatsStorage.Update("PollCount", MetricValue{
-		MType: "counter",
+	err := metricsMemoryRepo.Update("PollCount", MetricValue{
+		MType: MeticTypeCounter,
 		Delta: &startValue,
 	})
 	require.NoError(t, err)
-	err = memStatsStorage.Update("PollCount", MetricValue{
-		MType: "counter",
+	err = metricsMemoryRepo.Update("PollCount", MetricValue{
+		MType: MeticTypeCounter,
 		Delta: &incrementValue,
 	})
 	require.NoError(t, err)
-	PollCount, err := memStatsStorage.ReadValue("PollCount", "counter")
+	PollCount, err := metricsMemoryRepo.Read("PollCount", "counter")
 	require.NoError(t, err)
 
 	require.Equal(t, int64(29), *PollCount.Delta)
