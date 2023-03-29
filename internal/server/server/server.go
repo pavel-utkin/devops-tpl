@@ -3,9 +3,10 @@ package server
 import (
 	"devops-tpl/internal/server/config"
 	"devops-tpl/internal/server/handlers"
+	"devops-tpl/internal/server/middleware"
 	"devops-tpl/internal/server/storage"
 	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	chimiddleware "github.com/go-chi/chi/middleware"
 	"log"
 	"net/http"
 	"time"
@@ -20,10 +21,11 @@ type Server struct {
 func newRouter(memStatsStorage storage.MemStatsMemoryRepo) chi.Router {
 	router := chi.NewRouter()
 
-	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
-	router.Use(middleware.Logger)
-	router.Use(middleware.Recoverer)
+	router.Use(chimiddleware.RequestID)
+	router.Use(chimiddleware.RealIP)
+	router.Use(chimiddleware.Logger)
+	router.Use(chimiddleware.Recoverer)
+	router.Use(middleware.GzipHandle)
 
 	//Маршруты
 	router.Get("/", func(writer http.ResponseWriter, request *http.Request) {

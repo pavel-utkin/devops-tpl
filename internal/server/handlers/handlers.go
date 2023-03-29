@@ -1,15 +1,14 @@
 package handlers
 
 import (
+	"devops-tpl/internal/server/storage"
 	"encoding/json"
 	"fmt"
+	"github.com/asaskevich/govalidator"
+	"github.com/go-chi/chi"
 	"log"
 	"net/http"
 	"strconv"
-
-	"devops-tpl/internal/server/storage"
-	"github.com/asaskevich/govalidator"
-	"github.com/go-chi/chi"
 )
 
 func UpdateStatJSONPost(rw http.ResponseWriter, request *http.Request, memStatsStorage storage.MemStatsMemoryRepo) {
@@ -119,6 +118,7 @@ func PrintStatsValues(rw http.ResponseWriter, request *http.Request, memStatsSto
 	}
 
 	htmlPage := fmt.Sprintf(htmlTemplate, keyValuesHTML)
+	rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 	rw.WriteHeader(http.StatusOK)
 	rw.Write([]byte(htmlPage))
 }
@@ -175,6 +175,7 @@ func PrintStatValue(rw http.ResponseWriter, request *http.Request, memStatsStora
 		return
 	}
 
+	rw.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	rw.WriteHeader(http.StatusOK)
 	rw.Write([]byte(metric.GetStringValue()))
 }
