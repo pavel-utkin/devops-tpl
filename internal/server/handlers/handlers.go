@@ -115,7 +115,6 @@ func PrintStatsValues(rw http.ResponseWriter, request *http.Request, metricsMemo
 	}
 }
 
-// JSONStatValue get stat value via json
 func JSONStatValue(rw http.ResponseWriter, request *http.Request, metricsMemoryRepo storage.MetricStorage) {
 	var InputMetricsJSON struct {
 		ID    string `json:"id" valid:"required"`

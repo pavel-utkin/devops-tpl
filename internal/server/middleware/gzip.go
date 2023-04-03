@@ -2,13 +2,10 @@ package middleware
 
 import (
 	"compress/gzip"
-	"devops-tpl/internal/server/contenttype"
 	"io"
 	"net/http"
 	"strings"
 )
-
-var gzipAllowedContentTypes = []contenttype.ContentType{contenttype.ContentTypeHTML, contenttype.ContentTypeXML, contenttype.ContentTypeJSON, contenttype.ContentTypePlainText}
 
 type gzipWriter struct {
 	http.ResponseWriter

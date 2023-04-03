@@ -45,28 +45,28 @@ type MetricsMemoryRepo struct {
 }
 
 func NewMetricsMemoryRepo(config config.StoreConfig) MetricsMemoryRepo {
-	var metricsMemoryRepo MetricsMemoryRepo
+	var mmr MetricsMemoryRepo
 	var err error
 
-	metricsMemoryRepo.config = config
-	metricsMemoryRepo.uploadMutex = &sync.RWMutex{}
-	metricsMemoryRepo.gaugeStorage, err = NewMemoryRepo()
+	mmr.config = config
+	mmr.uploadMutex = &sync.RWMutex{}
+	mmr.gaugeStorage, err = NewMemoryRepo()
 	if err != nil {
 		panic("gaugeMemoryRepo init error")
 	}
-	metricsMemoryRepo.counterStorage, err = NewMemoryRepo()
+	mmr.counterStorage, err = NewMemoryRepo()
 	if err != nil {
 		panic("counterMemoryRepo init error")
 	}
 
-	if metricsMemoryRepo.config.Interval != syncUploadSymbol {
-		metricsMemoryRepo.IterativeUploadToFile()
+	if mmr.config.Interval != syncUploadSymbol {
+		mmr.IterativeUploadToFile()
 	}
 
-	return metricsMemoryRepo
+	return mmr
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) Update(key string, newMetricValue MetricValue) error {
+func (mmr MetricsMemoryRepo) Update(key string, newMetricValue MetricValue) error {
 	switch newMetricValue.MType {
 	case MeticTypeGauge:
 		if newMetricValue.Value == nil {
@@ -74,38 +74,38 @@ func (metricsMemoryRepo MetricsMemoryRepo) Update(key string, newMetricValue Met
 		}
 		newMetricValue.Delta = nil
 
-		return metricsMemoryRepo.updateGaugeValue(key, newMetricValue)
+		return mmr.updateGaugeValue(key, newMetricValue)
 	case MeticTypeCounter:
 		if newMetricValue.Delta == nil {
 			return errors.New("Metric Delta is empty")
 		}
 		newMetricValue.Value = nil
 
-		return metricsMemoryRepo.updateCounterValue(key, newMetricValue)
+		return mmr.updateCounterValue(key, newMetricValue)
 	default:
 		return errors.New("Metric type is not defined")
 	}
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) updateGaugeValue(key string, newMetricValue MetricValue) error {
-	metricsMemoryRepo.uploadMutex.Lock()
-	err := metricsMemoryRepo.gaugeStorage.Write(key, newMetricValue)
-	metricsMemoryRepo.uploadMutex.Unlock()
+func (mmr MetricsMemoryRepo) updateGaugeValue(key string, newMetricValue MetricValue) error {
+	mmr.uploadMutex.Lock()
+	err := mmr.gaugeStorage.Write(key, newMetricValue)
+	mmr.uploadMutex.Unlock()
 
 	if err != nil {
 		return err
 	}
 
-	if metricsMemoryRepo.config.Interval == syncUploadSymbol {
-		return metricsMemoryRepo.UploadToFile()
+	if mmr.config.Interval == syncUploadSymbol {
+		return mmr.UploadToFile()
 	}
 
 	return nil
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) updateCounterValue(key string, newMetricValue MetricValue) error {
+func (mmr MetricsMemoryRepo) updateCounterValue(key string, newMetricValue MetricValue) error {
 	//Чтение старого значения
-	oldMetricValue, err := metricsMemoryRepo.Read(key, MeticTypeCounter)
+	oldMetricValue, err := mmr.Read(key, MeticTypeCounter)
 	if err != nil {
 		var delta int64 = 0
 		oldMetricValue = MetricValue{
@@ -116,92 +116,100 @@ func (metricsMemoryRepo MetricsMemoryRepo) updateCounterValue(key string, newMet
 	newValue := *oldMetricValue.Delta + *newMetricValue.Delta
 	newMetricValue.Delta = &newValue
 
-	metricsMemoryRepo.uploadMutex.Lock()
-	metricsMemoryRepo.counterStorage.Write(key, newMetricValue)
-	metricsMemoryRepo.uploadMutex.Unlock()
+	mmr.uploadMutex.Lock()
+	mmr.counterStorage.Write(key, newMetricValue)
+	mmr.uploadMutex.Unlock()
 
-	if metricsMemoryRepo.config.Interval == syncUploadSymbol {
-		return metricsMemoryRepo.UploadToFile()
+	if mmr.config.Interval == syncUploadSymbol {
+		return mmr.UploadToFile()
 	}
 
 	return nil
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) Read(key string, metricType string) (MetricValue, error) {
+func (mmr MetricsMemoryRepo) Read(key string, metricType string) (MetricValue, error) {
 	switch metricType {
 	case MeticTypeGauge:
-		return metricsMemoryRepo.gaugeStorage.Read(key)
+		return mmr.gaugeStorage.Read(key)
 	case MeticTypeCounter:
-		return metricsMemoryRepo.counterStorage.Read(key)
+		return mmr.counterStorage.Read(key)
 	default:
 		return MetricValue{}, errors.New("metricType not found")
 	}
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) UploadToFile() error {
-	metricsMemoryRepo.uploadMutex.Lock()
-	defer metricsMemoryRepo.uploadMutex.Unlock()
-	if metricsMemoryRepo.config.File == "" {
+func (mmr MetricsMemoryRepo) UploadToFile() error {
+	mmr.uploadMutex.Lock()
+	defer mmr.uploadMutex.Unlock()
+	if mmr.config.File == "" {
 		return nil
 	}
 
-	file, err := os.OpenFile(metricsMemoryRepo.config.File, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+	file, err := os.OpenFile(mmr.config.File, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	allStates := metricsMemoryRepo.ReadAll()
-	json.NewEncoder(file).Encode(allStates)
+	allStates := mmr.ReadAll()
+	err = json.NewEncoder(file).Encode(allStates)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) IterativeUploadToFile() error {
-	tickerUpload := time.NewTicker(metricsMemoryRepo.config.Interval)
+func (mmr MetricsMemoryRepo) IterativeUploadToFile() error {
+	tickerUpload := time.NewTicker(mmr.config.Interval)
 
 	go func() {
 		for range tickerUpload.C {
-			metricsMemoryRepo.UploadToFile()
+			mmr.UploadToFile()
 		}
 	}()
 
 	return nil
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) InitFromFile() {
-	file, err := os.OpenFile(metricsMemoryRepo.config.File, os.O_RDONLY|os.O_CREATE, 0777)
+func (mmr MetricsMemoryRepo) InitFromFile() {
+	file, err := os.OpenFile(mmr.config.File, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
-		panic(err.Error())
+		fmt.Println(err.Error())
+		//panic(err.Error())
 	}
 	defer file.Close()
 
 	var metricsDump map[string]MetricMap
-	json.NewDecoder(file).Decode(&metricsDump)
+	err = json.NewDecoder(file).Decode(&metricsDump)
+	if err != nil {
+		fmt.Println(err.Error())
+		//panic(err.Error())
+	}
 
 	for _, metricList := range metricsDump {
-		metricsMemoryRepo.InitStateValues(metricList)
+		mmr.InitStateValues(metricList)
 	}
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) InitStateValues(DBSchema map[string]MetricValue) {
+func (mmr MetricsMemoryRepo) InitStateValues(DBSchema map[string]MetricValue) {
 	for metricKey, metricValue := range DBSchema {
-		metricsMemoryRepo.Update(metricKey, metricValue)
+		mmr.Update(metricKey, metricValue)
 	}
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) ReadAll() map[string]MetricMap {
+func (mmr MetricsMemoryRepo) ReadAll() map[string]MetricMap {
 	return map[string]MetricMap{
-		MeticTypeGauge:   metricsMemoryRepo.gaugeStorage.GetSchemaDump(),
-		MeticTypeCounter: metricsMemoryRepo.counterStorage.GetSchemaDump(),
+		MeticTypeGauge:   mmr.gaugeStorage.GetSchemaDump(),
+		MeticTypeCounter: mmr.counterStorage.GetSchemaDump(),
 	}
 }
 
-func (metricsMemoryRepo MetricsMemoryRepo) Close() error {
-	err := metricsMemoryRepo.gaugeStorage.Close()
+func (mmr MetricsMemoryRepo) Close() error {
+	err := mmr.gaugeStorage.Close()
 	if err != nil {
 		return err
 	}
-	err = metricsMemoryRepo.counterStorage.Close()
+	err = mmr.counterStorage.Close()
 
 	return err
 }

@@ -99,7 +99,7 @@ func (metricsUplader *MetricsUplader) oneStatUploadJSON(statType string, statNam
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode() != 200 {
+	if resp.StatusCode() != http.StatusOK {
 		return fmt.Errorf("HTTP Status: %v (not 200)", resp.StatusCode())
 	}
 
