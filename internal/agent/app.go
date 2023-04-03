@@ -39,8 +39,8 @@ func (app *AppHTTP) Run() {
 	app.startTime = time.Now()
 	app.isRun = true
 
-	tickerStatisticsRefresh := time.NewTicker(config.PollInterval * time.Second)
-	tickerStatisticsUpload := time.NewTicker(config.ReportInterval * time.Second)
+	tickerStatisticsRefresh := time.NewTicker(config.AppConfig.PollInterval)
+	tickerStatisticsUpload := time.NewTicker(config.AppConfig.ReportInterval)
 
 	for app.isRun {
 		select {

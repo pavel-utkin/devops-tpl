@@ -14,17 +14,16 @@ import (
 	"strings"
 )
 
-func oneStatUpload(httpClient *resty.Client, statType, statName, statValue string) error {
+func oneStatUpload(httpClient *resty.Client, statType string, statName string, statValue string) error {
 	resp, err := httpClient.R().
 		SetPathParams(map[string]string{
-			"host":  config.ServerHost,
-			"port":  strconv.Itoa(config.ServerPort),
+			"addr":  config.AppConfig.ServerAddr,
 			"type":  statType,
 			"name":  statName,
 			"value": statValue,
 		}).
 		SetHeader("Content-Type", "text/plain").
-		Post("http://{host}:{port}/update/{type}/{name}/{value}")
+		Post("http://{addr}/update/{type}/{name}/{value}")
 
 	if err != nil {
 		return err
@@ -58,7 +57,7 @@ func oneStatUploadJSON(httpClient *resty.Client, statType string, statName strin
 		metricValue, err = strconv.ParseFloat(statValue, 64)
 		OneMetrics.Value = metricValue
 	default:
-		return errors.New("unknow statType")
+		return errors.New("unknown statType")
 	}
 	if err != nil {
 		return errors.New("invalid statValue")
@@ -73,10 +72,9 @@ func oneStatUploadJSON(httpClient *resty.Client, statType string, statName strin
 		SetHeader("Content-Type", "application/json").
 		SetBody(string(statJSON)).
 		SetPathParams(map[string]string{
-			"host": config.ServerHost,
-			"port": strconv.Itoa(config.ServerPort),
+			"addr": config.AppConfig.ServerAddr,
 		}).
-		Post("http://{host}:{port}/update/")
+		Post("http://{addr}/update/")
 
 	if err != nil {
 		return err
@@ -99,7 +97,7 @@ func MemoryStatsUpload(httpClient *resty.Client, memoryStats statsreader.MemoryS
 		statType := strings.Split(typeOfMemoryStats.Field(i).Type.String(), ".")[1]
 
 		errorGroup.Go(func() error {
-			return oneStatUpload(httpClient, statType, statName, statValue)
+			return oneStatUploadJSON(httpClient, statType, statName, statValue)
 		})
 	}
 
