@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -103,17 +102,19 @@ func (m *MemoryRepo) Close() error {
 	return nil
 }
 
-// MemStatsMemoryRepo - репо для приходящей статистики
+//MemStatsMemoryRepo - репо для приходящей статистики
 type MemStatsMemoryRepo struct {
 	uploadMutex    *sync.RWMutex
 	gaugeStorage   MetricStorager
 	counterStorage MetricStorager
+	config         config.StoreConfig
 }
 
-func NewMemStatsMemoryRepo() MemStatsMemoryRepo {
+func NewMemStatsMemoryRepo(config config.StoreConfig) MemStatsMemoryRepo {
 	var memStatsStorage MemStatsMemoryRepo
 	var err error
 
+	memStatsStorage.config = config
 	memStatsStorage.uploadMutex = &sync.RWMutex{}
 	memStatsStorage.gaugeStorage, err = NewMemoryRepo()
 	if err != nil {
@@ -124,7 +125,7 @@ func NewMemStatsMemoryRepo() MemStatsMemoryRepo {
 		panic("counterMemoryRepo init error")
 	}
 
-	if config.AppConfig.Store.Interval != syncUploadSymbol {
+	if memStatsStorage.config.Interval != syncUploadSymbol {
 		memStatsStorage.IterativeUploadToFile()
 	}
 
@@ -134,7 +135,6 @@ func NewMemStatsMemoryRepo() MemStatsMemoryRepo {
 func (memStatsStorage MemStatsMemoryRepo) Update(key string, newMetricValue MetricValue) error {
 	switch newMetricValue.MType {
 	case "gauge":
-		log.Println("update gauge")
 		if newMetricValue.Value == nil {
 			return errors.New("Metric Value is empty")
 		}
@@ -142,7 +142,6 @@ func (memStatsStorage MemStatsMemoryRepo) Update(key string, newMetricValue Metr
 
 		return memStatsStorage.updateGaugeValue(key, newMetricValue)
 	case "counter":
-		log.Println("update counter")
 		if newMetricValue.Delta == nil {
 			return errors.New("Metric Delta is empty")
 		}
@@ -163,7 +162,7 @@ func (memStatsStorage MemStatsMemoryRepo) updateGaugeValue(key string, newMetric
 		return err
 	}
 
-	if config.AppConfig.Store.Interval == syncUploadSymbol {
+	if memStatsStorage.config.Interval == syncUploadSymbol {
 		return memStatsStorage.UploadToFile()
 	}
 
@@ -187,7 +186,7 @@ func (memStatsStorage MemStatsMemoryRepo) updateCounterValue(key string, newMetr
 	memStatsStorage.counterStorage.Write(key, newMetricValue)
 	memStatsStorage.uploadMutex.Unlock()
 
-	if config.AppConfig.Store.Interval == syncUploadSymbol {
+	if memStatsStorage.config.Interval == syncUploadSymbol {
 		return memStatsStorage.UploadToFile()
 	}
 
@@ -195,10 +194,6 @@ func (memStatsStorage MemStatsMemoryRepo) updateCounterValue(key string, newMetr
 }
 
 func (memStatsStorage MemStatsMemoryRepo) ReadValue(key string, metricType string) (MetricValue, error) {
-	log.Println("Read storage:")
-	log.Println(memStatsStorage.gaugeStorage.GetSchemaDump())
-	log.Println(memStatsStorage.counterStorage.GetSchemaDump())
-
 	switch metricType {
 	case "gauge":
 		return memStatsStorage.gaugeStorage.Read(key)
@@ -212,11 +207,11 @@ func (memStatsStorage MemStatsMemoryRepo) ReadValue(key string, metricType strin
 func (memStatsStorage MemStatsMemoryRepo) UploadToFile() error {
 	memStatsStorage.uploadMutex.Lock()
 	defer memStatsStorage.uploadMutex.Unlock()
-	if config.AppConfig.Store.File == "" {
+	if memStatsStorage.config.File == "" {
 		return nil
 	}
 
-	file, err := os.OpenFile(config.AppConfig.Store.File, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+	file, err := os.OpenFile(memStatsStorage.config.File, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
 	if err != nil {
 		return err
 	}
@@ -228,7 +223,7 @@ func (memStatsStorage MemStatsMemoryRepo) UploadToFile() error {
 }
 
 func (memStatsStorage MemStatsMemoryRepo) IterativeUploadToFile() error {
-	tickerUpload := time.NewTicker(config.AppConfig.Store.Interval)
+	tickerUpload := time.NewTicker(memStatsStorage.config.Interval)
 
 	go func() {
 		for range tickerUpload.C {
@@ -240,7 +235,7 @@ func (memStatsStorage MemStatsMemoryRepo) IterativeUploadToFile() error {
 }
 
 func (memStatsStorage MemStatsMemoryRepo) InitFromFile() {
-	file, err := os.OpenFile(config.AppConfig.Store.File, os.O_RDONLY|os.O_CREATE, 0777)
+	file, err := os.OpenFile(memStatsStorage.config.File, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		panic(err.Error())
 	}
