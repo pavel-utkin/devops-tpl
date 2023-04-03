@@ -46,6 +46,7 @@ func UpdateGaugePost(rw http.ResponseWriter, request *http.Request, metricsMemor
 	statName := chi.URLParam(request, "statName")
 	statValue := chi.URLParam(request, "statValue")
 	statValueFloat, err := strconv.ParseFloat(statValue, 64)
+	strconv.FormatFloat(statValueFloat, 'f', 3, 64)
 
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
