@@ -3,6 +3,7 @@ package metricsuploader
 import (
 	"devops-tpl/internal/agent/config"
 	"devops-tpl/internal/agent/statsreader"
+	"devops-tpl/internal/server/storage"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,11 +68,11 @@ func (metricsUplader *MetricsUplader) oneStatUploadJSON(statType string, statNam
 
 	var err error
 	switch OneMetrics.MType {
-	case "counter":
+	case storage.MeticTypeCounter:
 		var metricValue int64
 		metricValue, err = strconv.ParseInt(statValue, 10, 64)
 		OneMetrics.Delta = metricValue
-	case "gauge":
+	case storage.MeticTypeGauge:
 		var metricValue float64
 		metricValue, err = strconv.ParseFloat(statValue, 64)
 		OneMetrics.Value = metricValue
@@ -98,22 +99,22 @@ func (metricsUplader *MetricsUplader) oneStatUploadJSON(statType string, statNam
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode() != 200 {
+	if resp.StatusCode() != http.StatusOK {
 		return fmt.Errorf("HTTP Status: %v (not 200)", resp.StatusCode())
 	}
 
 	return nil
 }
 
-func (metricsUplader *MetricsUplader) MemoryStatsUpload(memoryStats statsreader.MemoryStatsDump) error {
-	reflectMemoryStats := reflect.ValueOf(memoryStats)
-	typeOfMemoryStats := reflectMemoryStats.Type()
+func (metricsUplader *MetricsUplader) MetricsUpload(metricsDump statsreader.MetricsDump) error {
+	reflectMetricsDump := reflect.ValueOf(metricsDump)
+	typeOfMetricsDump := reflectMetricsDump.Type()
 	errorGroup := new(errgroup.Group)
 
-	for i := 0; i < reflectMemoryStats.NumField(); i++ {
-		statName := typeOfMemoryStats.Field(i).Name
-		statValue := fmt.Sprintf("%v", reflectMemoryStats.Field(i).Interface())
-		statType := strings.Split(typeOfMemoryStats.Field(i).Type.String(), ".")[1]
+	for i := 0; i < reflectMetricsDump.NumField(); i++ {
+		statName := typeOfMetricsDump.Field(i).Name
+		statValue := fmt.Sprintf("%v", reflectMetricsDump.Field(i).Interface())
+		statType := strings.Split(typeOfMetricsDump.Field(i).Type.String(), ".")[1]
 
 		errorGroup.Go(func() error {
 			return metricsUplader.oneStatUploadJSON(statType, statName, statValue)

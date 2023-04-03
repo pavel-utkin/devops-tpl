@@ -14,8 +14,9 @@ type StoreConfig struct {
 }
 
 type Config struct {
-	ServerAddr string `env:"ADDRESS"` //host:port
-	Store      StoreConfig
+	ServerAddr       string `env:"ADDRESS"`
+	TemplatesAbsPath string `env:"TEMPLATES_ABS_PATH"`
+	Store            StoreConfig
 }
 
 func newConfig() *Config {
@@ -27,6 +28,7 @@ func newConfig() *Config {
 
 func (config *Config) initDefaultValues() {
 	config.ServerAddr = "127.0.0.1:8080"
+	config.TemplatesAbsPath = "./templates/index.html"
 	config.Store = StoreConfig{
 		Interval: time.Duration(300) * time.Second,
 		File:     "/tmp/devops-metrics-db.json",
