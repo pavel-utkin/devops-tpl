@@ -233,3 +233,15 @@ func (mmr MetricsMemoryRepo) Close() error {
 
 	return err
 }
+
+func (mmr MetricsMemoryRepo) Ping() error {
+	if mmr.gaugeStorage.Ping() != nil {
+		return mmr.gaugeStorage.Ping()
+	}
+
+	if mmr.counterStorage.Ping() != nil {
+		return mmr.gaugeStorage.Ping()
+	}
+
+	return nil
+}

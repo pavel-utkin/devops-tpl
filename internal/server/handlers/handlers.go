@@ -133,7 +133,7 @@ func UpdateNotImplementedPost(rw http.ResponseWriter, request *http.Request) {
 }
 
 func PrintStatsValues(rw http.ResponseWriter, request *http.Request, metricsMemoryRepo storage.MetricStorage, templatesPath string) {
-	t, err := template.ParseFiles(templatesPath)
+	t, err := template.ParseFiles(templatesPath + "/index.html")
 	if err != nil {
 		log.Println("Cant parse template ", err)
 		return
@@ -212,4 +212,18 @@ func PrintStatValue(rw http.ResponseWriter, request *http.Request, metricsMemory
 	rw.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	rw.WriteHeader(http.StatusOK)
 	rw.Write([]byte(metric.GetStringValue()))
+}
+
+func PingGet(rw http.ResponseWriter, request *http.Request, metricsMemoryRepo storage.MetricStorage) {
+	rw.Header().Set("Content-Type", "application/json")
+	response := responses.NewDefaultResponse()
+	pingError := metricsMemoryRepo.Ping()
+
+	if pingError != nil {
+		http.Error(rw, response.SetStatusError(pingError).GetJSONString(), http.StatusInternalServerError)
+		return
+	}
+
+	rw.WriteHeader(http.StatusOK)
+	rw.Write(response.GetJSONBytes())
 }
