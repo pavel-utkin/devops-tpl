@@ -38,11 +38,15 @@ func (server *Server) selectStorage() storage.MetricStorage {
 		if err != nil {
 			panic(err)
 		}
+
 		return repository
 	}
 
 	log.Println("Memory Storage")
 	repository := storage.NewMetricsMemoryRepo(storageConfig)
+	if server.config.Store.Restore {
+		repository.InitFromFile()
+	}
 	return repository
 }
 
