@@ -38,7 +38,6 @@ func (server *Server) selectStorage() storage.MetricStorage {
 		if err != nil {
 			panic(err)
 		}
-
 		return repository
 	}
 
