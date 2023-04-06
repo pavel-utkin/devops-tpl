@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"devops-tpl/internal/server/config"
+	"encoding/json"
 	"errors"
 	"fmt"
 	_ "github.com/jackc/pgx/v4/stdlib"
+	"os"
 	"log"
 	"time"
 )
@@ -150,6 +152,20 @@ func (repository DBRepo) Ping() error {
 	return nil
 }
 
+func (repository DBRepo) InitFromFile() {
+	file, err := os.OpenFile(repository.config.File, os.O_RDONLY|os.O_CREATE, 0777)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer file.Close()
+
+	var metricsDump map[string]MetricMap
+	json.NewDecoder(file).Decode(&metricsDump)
+
+	for _, metricList := range metricsDump {
+		repository.InitStateValues(metricList)
+	}
+}
 func (repository DBRepo) readAllCounter() (map[string]MetricValue, error) {
 	allValues := map[string]MetricValue{}
 
