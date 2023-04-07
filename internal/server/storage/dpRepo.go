@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"devops-tpl/internal/server/config"
 	"errors"
+	"fmt"
 	_ "github.com/jackc/pgx/v4/stdlib"
+	"log"
 	"time"
 )
 
@@ -24,8 +26,23 @@ func NewDBRepo(config config.StoreConfig) (DBRepo, error) {
 		return DBRepo{}, err
 	}
 	repository.db = db
+	repository.InitTables()
 
 	return repository, nil
+}
+
+func (repository DBRepo) InitTables() error {
+	_, err := repository.db.Exec("CREATE TABLE IF NOT EXISTS counter (id serial PRIMARY KEY, name VARCHAR (128) UNIQUE NOT NULL, value BIGINT NOT NULL)")
+	if err != nil {
+		return fmt.Errorf("failed to create counter table: %w", err)
+	}
+
+	_, err = repository.db.Exec("CREATE TABLE IF NOT EXISTS gauge (id serial PRIMARY KEY, name VARCHAR (128) UNIQUE NOT NULL, value DOUBLE PRECISION NOT NULL)")
+	if err != nil {
+		return fmt.Errorf("failed to create gauge table: %w", err)
+	}
+
+	return nil
 }
 
 func (repository DBRepo) Update(key string, newMetricValue MetricValue) error {
@@ -50,11 +67,13 @@ func (repository DBRepo) Update(key string, newMetricValue MetricValue) error {
 }
 
 func (repository DBRepo) updateGauge(key string, newMetricValue MetricValue) error {
-	return nil
+	_, err := repository.db.Exec("INSERT INTO gauge (name, value) VALUES ($1, $2) ON CONFLICT(name) DO UPDATE set value = $2", key, *newMetricValue.Value)
+	return err
 }
 
 func (repository DBRepo) updateCounter(key string, newMetricValue MetricValue) error {
-	return nil
+	_, err := repository.db.Exec("INSERT INTO counter (name, value) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET value = counter.value + $2", key, *newMetricValue.Delta)
+	return err
 }
 
 func (repository DBRepo) Read(key string, metricType string) (MetricValue, error) {
@@ -69,11 +88,27 @@ func (repository DBRepo) Read(key string, metricType string) (MetricValue, error
 }
 
 func (repository DBRepo) readGauge(key string) (MetricValue, error) {
-	return MetricValue{}, errors.New("not found")
+	metricValue := MetricValue{
+		MType: MeticTypeGauge,
+	}
+
+	err := repository.db.QueryRow("SELECT value FROM gauge WHERE name = $1", key).Scan(&metricValue.Value)
+	if err != nil {
+		return metricValue, fmt.Errorf("gauge select error : %w", err)
+	}
+	return metricValue, nil
 }
 
 func (repository DBRepo) readCounter(key string) (MetricValue, error) {
-	return MetricValue{}, errors.New("not found")
+	metricValue := MetricValue{
+		MType: MeticTypeCounter,
+	}
+
+	err := repository.db.QueryRow("SELECT value FROM counter WHERE name = $1", key).Scan(&metricValue.Delta)
+	if err != nil {
+		return metricValue, fmt.Errorf("counter select error : %w", err)
+	}
+	return metricValue, nil
 }
 
 func (repository DBRepo) InitStateValues(DBSchema map[string]MetricValue) {
@@ -83,7 +118,21 @@ func (repository DBRepo) InitStateValues(DBSchema map[string]MetricValue) {
 }
 
 func (repository DBRepo) ReadAll() map[string]MetricMap {
-	return map[string]MetricMap{}
+	var err error
+	AllValues := map[string]MetricMap{}
+
+	AllValues[MeticTypeCounter], err = repository.readAllCounter()
+	log.Println(AllValues[MeticTypeCounter])
+	if err != nil {
+		return AllValues
+	}
+
+	AllValues[MeticTypeGauge], err = repository.readAllGauge()
+	if err != nil {
+		return AllValues
+	}
+
+	return AllValues
 }
 
 func (repository DBRepo) Close() error {
@@ -99,4 +148,68 @@ func (repository DBRepo) Ping() error {
 		return err
 	}
 	return nil
+}
+
+func (repository DBRepo) readAllCounter() (map[string]MetricValue, error) {
+	allValues := map[string]MetricValue{}
+
+	rows, err := repository.db.Query("SELECT name, value from counter")
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var vKey string
+		v := MetricValue{
+			MType: MeticTypeCounter,
+		}
+
+		err = rows.Scan(&vKey, &v.Delta)
+		if err != nil {
+			return nil, err
+		}
+
+		allValues[vKey] = v
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return allValues, nil
+}
+
+func (repository DBRepo) readAllGauge() (map[string]MetricValue, error) {
+	allValues := map[string]MetricValue{}
+
+	rows, err := repository.db.Query("SELECT name, value from gauge")
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var vKey string
+		v := MetricValue{
+			MType: MeticTypeGauge,
+		}
+
+		err = rows.Scan(&vKey, &v.Value)
+		if err != nil {
+			return nil, err
+		}
+
+		allValues[vKey] = v
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return allValues, nil
 }
