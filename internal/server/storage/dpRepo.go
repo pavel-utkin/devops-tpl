@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	_ "github.com/jackc/pgx/v4/stdlib"
-	"log"
+	"os"
 	"time"
 )
 
@@ -27,9 +27,17 @@ func NewDBRepo(config config.StoreConfig) (DBRepo, error) {
 		return DBRepo{}, err
 	}
 	repository.db = db
+	repository.PrepareDB()
 	repository.InitTables()
 
 	return repository, nil
+}
+
+func (repository DBRepo) PrepareDB() {
+	repository.db.SetMaxOpenConns(20)
+	repository.db.SetMaxIdleConns(20)
+	repository.db.SetConnMaxIdleTime(time.Second * 30)
+	repository.db.SetConnMaxLifetime(time.Minute * 2)
 }
 
 func (repository DBRepo) InitTables() error {
@@ -67,13 +75,44 @@ func (repository DBRepo) Update(key string, newMetricValue MetricValue) error {
 	}
 }
 
+func (repository DBRepo) UpdateTX(key string, newMetricValue MetricValue, stmt *sql.Stmt) error {
+	switch newMetricValue.MType {
+	case MeticTypeGauge:
+		if newMetricValue.Value == nil {
+			return errors.New("Metric Value is empty")
+		}
+		newMetricValue.Delta = nil
+
+		return repository.updateGaugeTX(key, newMetricValue, stmt)
+	case MeticTypeCounter:
+		if newMetricValue.Delta == nil {
+			return errors.New("Metric Delta is empty")
+		}
+		newMetricValue.Value = nil
+
+		return repository.updateCounterTX(key, newMetricValue, stmt)
+	default:
+		return errors.New("Metric type is not defined")
+	}
+}
+
 func (repository DBRepo) updateGauge(key string, newMetricValue MetricValue) error {
 	_, err := repository.db.Exec("INSERT INTO gauge (name, value) VALUES ($1, $2) ON CONFLICT(name) DO UPDATE set value = $2", key, *newMetricValue.Value)
 	return err
 }
 
+func (repository DBRepo) updateGaugeTX(key string, newMetricValue MetricValue, stmt *sql.Stmt) error {
+	_, err := stmt.Exec(key, *newMetricValue.Value)
+	return err
+}
+
 func (repository DBRepo) updateCounter(key string, newMetricValue MetricValue) error {
 	_, err := repository.db.Exec("INSERT INTO counter (name, value) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET value = counter.value + $2", key, *newMetricValue.Delta)
+	return err
+}
+
+func (repository DBRepo) updateCounterTX(key string, newMetricValue MetricValue, stmt *sql.Stmt) error {
+	_, err := stmt.Exec(key, *newMetricValue.Delta)
 	return err
 }
 
@@ -112,10 +151,54 @@ func (repository DBRepo) readCounter(key string) (MetricValue, error) {
 	return metricValue, nil
 }
 
-func (repository DBRepo) InitStateValues(DBSchema map[string]MetricValue) {
-	for metricKey, metricValue := range DBSchema {
-		repository.Update(metricKey, metricValue)
+func (repository DBRepo) UpdateManySliceMetric(MetricBatch []Metric) error {
+	tx, err := repository.db.Begin()
+	if err != nil {
+		return err
 	}
+	defer tx.Rollback()
+
+	stmtUpdateGauge, err := tx.Prepare("INSERT INTO gauge (name, value) VALUES ($1, $2) ON CONFLICT(name) DO UPDATE set value = $2")
+	if err != nil {
+		return err
+	}
+	defer stmtUpdateGauge.Close()
+
+	stmtCounterGauge, err := tx.Prepare("INSERT INTO counter (name, value) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET value = counter.value + $2")
+	if err != nil {
+		return err
+	}
+	defer stmtCounterGauge.Close()
+
+	for _, metricValue := range MetricBatch {
+		var stmtMetric *sql.Stmt
+		if metricValue.MType == MeticTypeGauge {
+			stmtMetric = stmtUpdateGauge
+		} else {
+			stmtMetric = stmtCounterGauge
+		}
+
+		err = repository.UpdateTX(metricValue.ID, metricValue.MetricValue, stmtMetric)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (repository DBRepo) UpdateMany(DBSchema map[string]MetricValue) error {
+	MetricBatch := []Metric{}
+
+	for metricKey, metricValue := range DBSchema {
+		MetricBatch = append(MetricBatch, Metric{
+			ID:          metricKey,
+			MetricValue: metricValue,
+		})
+	}
+
+	return repository.UpdateManySliceMetric(MetricBatch)
 }
 
 func (repository DBRepo) ReadAll() map[string]MetricMap {
@@ -123,7 +206,6 @@ func (repository DBRepo) ReadAll() map[string]MetricMap {
 	AllValues := map[string]MetricMap{}
 
 	AllValues[MeticTypeCounter], err = repository.readAllCounter()
-	log.Println(AllValues[MeticTypeCounter])
 	if err != nil {
 		return AllValues
 	}
@@ -151,6 +233,20 @@ func (repository DBRepo) Ping() error {
 	return nil
 }
 
+func (repository DBRepo) InitFromFile() {
+	file, err := os.OpenFile(repository.config.File, os.O_RDONLY|os.O_CREATE, 0777)
+	if err != nil {
+		panic(err.Error())
+	}
+	defer file.Close()
+
+	var metricsDump map[string]MetricMap
+	json.NewDecoder(file).Decode(&metricsDump)
+
+	for _, metricList := range metricsDump {
+		repository.UpdateMany(metricList)
+	}
+}
 func (repository DBRepo) readAllCounter() (map[string]MetricValue, error) {
 	allValues := map[string]MetricValue{}
 
