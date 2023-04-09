@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -90,20 +91,20 @@ func (mmr MetricsMemoryRepo) Update(key string, newMetricValue MetricValue) erro
 	switch newMetricValue.MType {
 	case MeticTypeGauge:
 		if newMetricValue.Value == nil {
-			return errors.New("Metric Value is empty")
+			return errors.New("metric Value is empty")
 		}
 		newMetricValue.Delta = nil
 
 		return mmr.updateGaugeValue(key, newMetricValue)
 	case MeticTypeCounter:
 		if newMetricValue.Delta == nil {
-			return errors.New("Metric Delta is empty")
+			return errors.New("metric Delta is empty")
 		}
 		newMetricValue.Value = nil
 
 		return mmr.updateCounterValue(key, newMetricValue)
 	default:
-		return errors.New("Metric type is not defined")
+		return errors.New("metric type is not defined")
 	}
 }
 
@@ -179,16 +180,17 @@ func (mmr MetricsMemoryRepo) UploadToFile() error {
 	return nil
 }
 
-func (mmr MetricsMemoryRepo) IterativeUploadToFile() error {
+func (mmr MetricsMemoryRepo) IterativeUploadToFile() {
 	tickerUpload := time.NewTicker(mmr.config.Interval)
 
 	go func() {
 		for range tickerUpload.C {
-			mmr.UploadToFile()
+			err := mmr.UploadToFile()
+			if err != nil {
+				log.Println(err)
+			}
 		}
 	}()
-
-	return nil
 }
 
 func (mmr MetricsMemoryRepo) InitFromFile() {
@@ -202,26 +204,25 @@ func (mmr MetricsMemoryRepo) InitFromFile() {
 	var metricsDump map[string]MetricMap
 	err = json.NewDecoder(file).Decode(&metricsDump)
 	if err != nil {
-		fmt.Println(err.Error())
-		//panic(err.Error())
+		log.Println(err)
 	}
 
 	for _, metricList := range metricsDump {
-		mmr.UpdateMany(metricList)
+		err = mmr.UpdateMany(metricList)
+	}
+	if err != nil {
+		log.Println(err)
 	}
 }
 
 func (mmr MetricsMemoryRepo) UpdateManySliceMetric(MetricBatch []Metric) error {
-	MetricValueBatch := MetricMap{}
-	for _, OneMetric := range MetricBatch {
-		MetricValueBatch[OneMetric.ID] = MetricValue{
-			MType: OneMetric.MType,
-			Delta: OneMetric.Delta,
-			Value: OneMetric.Value,
+	for _, metricValue := range MetricBatch {
+		err := mmr.Update(metricValue.ID, metricValue.MetricValue)
+		if err != nil {
+			return err
 		}
 	}
-
-	return mmr.UpdateMany(MetricValueBatch)
+	return nil
 }
 
 func (mmr MetricsMemoryRepo) UpdateMany(DBSchema map[string]MetricValue) error {
