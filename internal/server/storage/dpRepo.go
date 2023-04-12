@@ -46,12 +46,12 @@ func (repository DBRepo) PrepareDB() {
 
 func (repository DBRepo) InitTables() error {
 	ctx := context.Background()
-	_, err := repository.db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS counter (id serial PRIMARY KEY, name VARCHAR (128) UNIQUE NOT NULL, value BIGINT NOT NULL)")
+	_, err := repository.db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS counter (id serial, name VARCHAR (128) UNIQUE NOT NULL, value BIGINT NOT NULL)")
 	if err != nil {
 		return fmt.Errorf("failed to create counter table: %w", err)
 	}
 
-	_, err = repository.db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS gauge (id serial PRIMARY KEY, name VARCHAR (128) UNIQUE NOT NULL, value DOUBLE PRECISION NOT NULL)")
+	_, err = repository.db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS gauge (id serial, name VARCHAR (128) UNIQUE NOT NULL, value DOUBLE PRECISION NOT NULL)")
 	if err != nil {
 		return fmt.Errorf("failed to create gauge table: %w", err)
 	}
