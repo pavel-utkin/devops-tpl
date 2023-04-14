@@ -1,16 +1,14 @@
 package server
 
 import (
-	"log"
-	"net/http"
-	"time"
-
 	"devops-tpl/internal/server/config"
-	"devops-tpl/internal/server/handlers"
 	"devops-tpl/internal/server/middleware"
 	"devops-tpl/internal/server/storage"
 	"github.com/go-chi/chi"
 	chimiddleware "github.com/go-chi/chi/middleware"
+	"log"
+	"net/http"
+	"time"
 )
 
 type Server struct {
@@ -22,6 +20,7 @@ type Server struct {
 
 func NewServer(config config.Config) *Server {
 	log.Println(config)
+
 	return &Server{
 		config: config,
 	}
@@ -30,19 +29,19 @@ func NewServer(config config.Config) *Server {
 func (server *Server) selectStorage() storage.MetricStorage {
 	storageConfig := server.config.Store
 
-	log.Println("DB Storage LINE 33")
-	log.Println("DB Storage LINE 33" + storageConfig.DatabaseDSN)
 	if storageConfig.DatabaseDSN != "" {
 		log.Println("DB Storage")
 		repository, err := storage.NewDBRepo(storageConfig)
 		if err != nil {
 			panic(err)
 		}
+
 		return repository
 	}
 
 	log.Println("Memory Storage")
 	repository := storage.NewMetricsMemoryRepo(storageConfig)
+
 	return repository
 }
 
@@ -64,39 +63,19 @@ func (server *Server) initRouter() {
 	router.Use(chimiddleware.Recoverer)
 	router.Use(middleware.GzipHandle)
 
-	//Маршруты
-	router.Get("/", func(writer http.ResponseWriter, request *http.Request) {
-		handlers.PrintStatsValues(writer, request, server.storage, server.config.TemplatesAbsPath)
-	})
+	router.Get("/", server.PrintAllMetricStatic)
+	router.Get("/ping", server.PingGetJSON)
+	router.Get("/value/{statType}/{statName}", server.PrintMetricGet)
 
-	router.Get("/ping", func(writer http.ResponseWriter, request *http.Request) {
-		handlers.PingGet(writer, request, server.storage)
-	})
-
-	//json handler
-	router.Post("/value/", func(writer http.ResponseWriter, request *http.Request) {
-		handlers.JSONStatValue(writer, request, server.storage, server.config.SignKey)
-	})
-
-	router.Get("/value/{statType}/{statName}", func(writer http.ResponseWriter, request *http.Request) {
-		handlers.PrintStatValue(writer, request, server.storage)
-	})
+	router.Post("/value/", server.MetricValuePostJSON)
+	router.Post("/updates/", server.UpdateMetricBatchJSON)
 
 	router.Route("/update/", func(router chi.Router) {
-		//json handler
-		router.Post("/", func(writer http.ResponseWriter, request *http.Request) {
-			handlers.UpdateStatJSONPost(writer, request, server.storage, server.config.SignKey)
-		})
+		router.Post("/", server.UpdateMetricPostJSON)
 
-		router.Post("/gauge/{statName}/{statValue}", func(writer http.ResponseWriter, request *http.Request) {
-			handlers.UpdateGaugePost(writer, request, server.storage)
-		})
-		router.Post("/counter/{statName}/{statValue}", func(writer http.ResponseWriter, request *http.Request) {
-			handlers.UpdateCounterPost(writer, request, server.storage)
-		})
-		router.Post("/{statType}/{statName}/{statValue}", func(writer http.ResponseWriter, request *http.Request) {
-			handlers.UpdateNotImplementedPost(writer, request)
-		})
+		router.Post("/gauge/{statName}/{statValue}", server.UpdateGaugePost)
+		router.Post("/counter/{statName}/{statValue}", server.UpdateCounterPost)
+		router.Post("/{statType}/{statName}/{statValue}", server.UpdateNotImplementedPost)
 	})
 
 	server.chiRouter = router

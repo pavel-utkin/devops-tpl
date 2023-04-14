@@ -207,14 +207,32 @@ func (mmr MetricsMemoryRepo) InitFromFile() {
 	}
 
 	for _, metricList := range metricsDump {
-		mmr.InitStateValues(metricList)
+		mmr.UpdateMany(metricList)
 	}
 }
 
-func (mmr MetricsMemoryRepo) InitStateValues(DBSchema map[string]MetricValue) {
-	for metricKey, metricValue := range DBSchema {
-		mmr.Update(metricKey, metricValue)
+func (mmr MetricsMemoryRepo) UpdateManySliceMetric(MetricBatch []Metric) error {
+	MetricValueBatch := MetricMap{}
+	for _, OneMetric := range MetricBatch {
+		MetricValueBatch[OneMetric.ID] = MetricValue{
+			MType: OneMetric.MType,
+			Delta: OneMetric.Delta,
+			Value: OneMetric.Value,
+		}
 	}
+
+	return mmr.UpdateMany(MetricValueBatch)
+}
+
+func (mmr MetricsMemoryRepo) UpdateMany(DBSchema map[string]MetricValue) error {
+	for metricKey, metricValue := range DBSchema {
+		err := mmr.Update(metricKey, metricValue)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (mmr MetricsMemoryRepo) ReadAll() map[string]MetricMap {
