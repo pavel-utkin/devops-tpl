@@ -101,24 +101,24 @@ func (server Server) UpdateMetricBatchJSON(rw http.ResponseWriter, request *http
 
 func (server Server) MetricValuePostJSON(rw http.ResponseWriter, request *http.Request) {
 	rw.Header().Set("Content-Type", "application/json")
-	var InputMetricsJSON struct {
+	var inputMetricsJSON struct {
 		ID    string `json:"id" valid:"required"`
 		MType string `json:"type" valid:"required,in(counter|gauge)"`
 	}
 
-	err := json.NewDecoder(request.Body).Decode(&InputMetricsJSON)
+	err := json.NewDecoder(request.Body).Decode(&inputMetricsJSON)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	_, err = govalidator.ValidateStruct(InputMetricsJSON)
+	_, err = govalidator.ValidateStruct(inputMetricsJSON)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	statValue, err := server.storage.Read(InputMetricsJSON.ID, InputMetricsJSON.MType)
+	statValue, err := server.storage.Read(inputMetricsJSON.ID, inputMetricsJSON.MType)
 	if err != nil {
 		http.Error(rw, "Unknown statName", http.StatusNotFound)
 		return
@@ -129,7 +129,7 @@ func (server Server) MetricValuePostJSON(rw http.ResponseWriter, request *http.R
 		Hash string `json:"hash"`
 	}{
 		Metric: storage.Metric{
-			ID: InputMetricsJSON.ID,
+			ID: inputMetricsJSON.ID,
 			MetricValue: storage.MetricValue{
 				MType: statValue.MType,
 				Delta: statValue.Delta,
@@ -139,7 +139,7 @@ func (server Server) MetricValuePostJSON(rw http.ResponseWriter, request *http.R
 	}
 
 	if server.config.SignKey != "" {
-		answerJSON.Hash = hex.EncodeToString(answerJSON.Metric.GetHash(InputMetricsJSON.ID, server.config.SignKey))
+		answerJSON.Hash = hex.EncodeToString(answerJSON.Metric.GetHash(inputMetricsJSON.ID, server.config.SignKey))
 	}
 
 	rw.WriteHeader(http.StatusOK)
@@ -150,7 +150,7 @@ func (server Server) MetricValuePostJSON(rw http.ResponseWriter, request *http.R
 	}
 }
 
-func (server Server) PingGetJSON(rw http.ResponseWriter, request *http.Request) {
+func (server Server) PingGetJSON(rw http.ResponseWriter, _ *http.Request) {
 	rw.Header().Set("Content-Type", "application/json")
 	response := responses.NewDefaultResponse()
 	pingError := server.storage.Ping()

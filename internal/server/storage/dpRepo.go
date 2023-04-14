@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	_ "github.com/jackc/pgx/v4/stdlib"
+	"log"
 	"os"
 	"time"
 )
@@ -28,7 +29,10 @@ func NewDBRepo(config config.StoreConfig) (DBRepo, error) {
 	}
 	repository.db = db
 	repository.PrepareDB()
-	repository.InitTables()
+	err = repository.InitTables()
+	if err != nil {
+		return DBRepo{}, err
+	}
 
 	return repository, nil
 }
@@ -41,12 +45,13 @@ func (repository DBRepo) PrepareDB() {
 }
 
 func (repository DBRepo) InitTables() error {
-	_, err := repository.db.Exec("CREATE TABLE IF NOT EXISTS counter (id serial PRIMARY KEY, name VARCHAR (128) UNIQUE NOT NULL, value BIGINT NOT NULL)")
+	ctx := context.Background()
+	_, err := repository.db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS counter (id serial, name VARCHAR (128) UNIQUE NOT NULL, value BIGINT NOT NULL)")
 	if err != nil {
 		return fmt.Errorf("failed to create counter table: %w", err)
 	}
 
-	_, err = repository.db.Exec("CREATE TABLE IF NOT EXISTS gauge (id serial PRIMARY KEY, name VARCHAR (128) UNIQUE NOT NULL, value DOUBLE PRECISION NOT NULL)")
+	_, err = repository.db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS gauge (id serial, name VARCHAR (128) UNIQUE NOT NULL, value DOUBLE PRECISION NOT NULL)")
 	if err != nil {
 		return fmt.Errorf("failed to create gauge table: %w", err)
 	}
@@ -58,20 +63,20 @@ func (repository DBRepo) Update(key string, newMetricValue MetricValue) error {
 	switch newMetricValue.MType {
 	case MeticTypeGauge:
 		if newMetricValue.Value == nil {
-			return errors.New("Metric Value is empty")
+			return errors.New("metric Value is empty")
 		}
 		newMetricValue.Delta = nil
 
 		return repository.updateGauge(key, newMetricValue)
 	case MeticTypeCounter:
 		if newMetricValue.Delta == nil {
-			return errors.New("Metric Delta is empty")
+			return errors.New("metric Delta is empty")
 		}
 		newMetricValue.Value = nil
 
 		return repository.updateCounter(key, newMetricValue)
 	default:
-		return errors.New("Metric type is not defined")
+		return errors.New("metric type is not defined")
 	}
 }
 
@@ -79,25 +84,26 @@ func (repository DBRepo) UpdateTX(key string, newMetricValue MetricValue, stmt *
 	switch newMetricValue.MType {
 	case MeticTypeGauge:
 		if newMetricValue.Value == nil {
-			return errors.New("Metric Value is empty")
+			return errors.New("metric Value is empty")
 		}
 		newMetricValue.Delta = nil
 
 		return repository.updateGaugeTX(key, newMetricValue, stmt)
 	case MeticTypeCounter:
 		if newMetricValue.Delta == nil {
-			return errors.New("Metric Delta is empty")
+			return errors.New("metric Delta is empty")
 		}
 		newMetricValue.Value = nil
 
 		return repository.updateCounterTX(key, newMetricValue, stmt)
 	default:
-		return errors.New("Metric type is not defined")
+		return errors.New("metric type is not defined")
 	}
 }
 
 func (repository DBRepo) updateGauge(key string, newMetricValue MetricValue) error {
-	_, err := repository.db.Exec("INSERT INTO gauge (name, value) VALUES ($1, $2) ON CONFLICT(name) DO UPDATE set value = $2", key, *newMetricValue.Value)
+	ctx := context.Background()
+	_, err := repository.db.ExecContext(ctx, "INSERT INTO gauge (name, value) VALUES ($1, $2) ON CONFLICT(name) DO UPDATE set value = $2", key, *newMetricValue.Value)
 	return err
 }
 
@@ -107,7 +113,8 @@ func (repository DBRepo) updateGaugeTX(key string, newMetricValue MetricValue, s
 }
 
 func (repository DBRepo) updateCounter(key string, newMetricValue MetricValue) error {
-	_, err := repository.db.Exec("INSERT INTO counter (name, value) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET value = counter.value + $2", key, *newMetricValue.Delta)
+	ctx := context.Background()
+	_, err := repository.db.ExecContext(ctx, "INSERT INTO counter (name, value) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET value = counter.value + $2", key, *newMetricValue.Delta)
 	return err
 }
 
@@ -132,7 +139,9 @@ func (repository DBRepo) readGauge(key string) (MetricValue, error) {
 		MType: MeticTypeGauge,
 	}
 
-	err := repository.db.QueryRow("SELECT value FROM gauge WHERE name = $1", key).Scan(&metricValue.Value)
+	ctx := context.Background()
+
+	err := repository.db.QueryRowContext(ctx, "SELECT value FROM gauge WHERE name = $1", key).Scan(&metricValue.Value)
 	if err != nil {
 		return metricValue, fmt.Errorf("gauge select error : %w", err)
 	}
@@ -144,7 +153,9 @@ func (repository DBRepo) readCounter(key string) (MetricValue, error) {
 		MType: MeticTypeCounter,
 	}
 
-	err := repository.db.QueryRow("SELECT value FROM counter WHERE name = $1", key).Scan(&metricValue.Delta)
+	ctx := context.Background()
+
+	err := repository.db.QueryRowContext(ctx, "SELECT value FROM counter WHERE name = $1", key).Scan(&metricValue.Delta)
 	if err != nil {
 		return metricValue, fmt.Errorf("counter select error : %w", err)
 	}
@@ -152,7 +163,8 @@ func (repository DBRepo) readCounter(key string) (MetricValue, error) {
 }
 
 func (repository DBRepo) UpdateManySliceMetric(MetricBatch []Metric) error {
-	tx, err := repository.db.Begin()
+	ctx := context.Background()
+	tx, err := repository.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -189,7 +201,7 @@ func (repository DBRepo) UpdateManySliceMetric(MetricBatch []Metric) error {
 }
 
 func (repository DBRepo) UpdateMany(DBSchema map[string]MetricValue) error {
-	MetricBatch := []Metric{}
+	var MetricBatch []Metric
 
 	for metricKey, metricValue := range DBSchema {
 		MetricBatch = append(MetricBatch, Metric{
@@ -241,16 +253,22 @@ func (repository DBRepo) InitFromFile() {
 	defer file.Close()
 
 	var metricsDump map[string]MetricMap
-	json.NewDecoder(file).Decode(&metricsDump)
+	err = json.NewDecoder(file).Decode(&metricsDump)
+	if err != nil {
+		log.Println(err)
+	}
 
 	for _, metricList := range metricsDump {
-		repository.UpdateMany(metricList)
+		err = repository.UpdateMany(metricList)
+	}
+	if err != nil {
+		log.Println(err)
 	}
 }
 func (repository DBRepo) readAllCounter() (map[string]MetricValue, error) {
 	allValues := map[string]MetricValue{}
-
-	rows, err := repository.db.Query("SELECT name, value from counter")
+	ctx := context.Background()
+	rows, err := repository.db.QueryContext(ctx, "SELECT name, value from counter")
 	if err != nil {
 		return nil, err
 	}
@@ -281,8 +299,8 @@ func (repository DBRepo) readAllCounter() (map[string]MetricValue, error) {
 
 func (repository DBRepo) readAllGauge() (map[string]MetricValue, error) {
 	allValues := map[string]MetricValue{}
-
-	rows, err := repository.db.Query("SELECT name, value from gauge")
+	ctx := context.Background()
+	rows, err := repository.db.QueryContext(ctx, "SELECT name, value from gauge")
 	if err != nil {
 		return nil, err
 	}

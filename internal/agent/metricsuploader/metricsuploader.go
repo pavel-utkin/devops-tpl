@@ -149,7 +149,7 @@ func (metricsUplader *MetricsUplader) MetricsUpload(metricsDump statsreader.Metr
 func (metricsUplader *MetricsUplader) MetricsUploadBatch(metricsDump statsreader.MetricsDump) error {
 	reflectMetricsDump := reflect.ValueOf(metricsDump)
 	typeOfMetricsDump := reflectMetricsDump.Type()
-	MetricValueBatch := []storage.Metric{}
+	var MetricValueBatch []storage.Metric
 
 	for i := 0; i < reflectMetricsDump.NumField(); i++ {
 		metricName := typeOfMetricsDump.Field(i).Name
