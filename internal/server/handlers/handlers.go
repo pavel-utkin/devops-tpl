@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"crypto/hmac"
+	"devops-tpl/internal/server/responses"
 	"devops-tpl/internal/server/storage"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"github.com/asaskevich/govalidator"
 	"github.com/go-chi/chi"
 	"html/template"
@@ -12,34 +15,60 @@ import (
 	"strconv"
 )
 
-func UpdateStatJSONPost(rw http.ResponseWriter, request *http.Request, metricsMemoryRepo storage.MetricStorage) {
-	var OneMetric storage.Metric
+func UpdateStatJSONPost(rw http.ResponseWriter, request *http.Request, metricsMemoryRepo storage.MetricStorage, SignKey string) {
+	rw.Header().Set("Content-Type", "application/json")
 
-	err := json.NewDecoder(request.Body).Decode(&OneMetric)
+	inputJSON := struct {
+		storage.Metric
+		Hash string `json:"hash,omitempty"`
+	}{}
+	response := responses.NewUpdateMetricResponse()
+
+	//JSON decoding
+	err := json.NewDecoder(request.Body).Decode(&inputJSON)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		http.Error(rw, response.SetStatusError(err).GetJSONString(), http.StatusBadRequest)
 		return
 	}
 
-	_, err = govalidator.ValidateStruct(OneMetric)
+	//Validation
+	_, err = govalidator.ValidateStruct(inputJSON)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		http.Error(rw, response.SetStatusError(err).GetJSONString(), http.StatusBadRequest)
 		return
 	}
 
-	err = metricsMemoryRepo.Update(OneMetric.ID, storage.MetricValue{
-		MType: OneMetric.MType,
-		Value: OneMetric.Value,
-		Delta: OneMetric.Delta,
-	})
+	newMetricValue := storage.MetricValue{
+		MType: inputJSON.MType,
+		Value: inputJSON.Value,
+		Delta: inputJSON.Delta,
+	}
+
+	//Check sign
+	var metricHash []byte
+	if SignKey != "" {
+		requestMetricHash, err := hex.DecodeString(inputJSON.Hash)
+		if err != nil {
+			http.Error(rw, response.SetStatusError(err).GetJSONString(), http.StatusBadRequest)
+			return
+		}
+
+		metricHash = newMetricValue.GetHash(inputJSON.ID, SignKey)
+		if !hmac.Equal(requestMetricHash, metricHash) {
+			http.Error(rw, response.SetStatusError(errors.New("invalid hash")).GetJSONString(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	//Update value
+	err = metricsMemoryRepo.Update(inputJSON.ID, newMetricValue)
 	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadRequest)
+		http.Error(rw, response.SetStatusError(err).GetJSONString(), http.StatusBadRequest)
 		return
 	}
 
-	log.Println("Update metric via JSON")
 	rw.WriteHeader(http.StatusOK)
-	rw.Write([]byte("Ok"))
+	rw.Write(response.SetHash(hex.EncodeToString(metricHash)).GetJSONBytes())
 }
 
 func UpdateGaugePost(rw http.ResponseWriter, request *http.Request, metricsMemoryRepo storage.MetricStorage) {
@@ -55,7 +84,7 @@ func UpdateGaugePost(rw http.ResponseWriter, request *http.Request, metricsMemor
 	}
 
 	err = metricsMemoryRepo.Update(statName, storage.MetricValue{
-		MType: "gauge",
+		MType: storage.MeticTypeGauge,
 		Value: &statValueFloat,
 	})
 	if err != nil {
@@ -81,7 +110,7 @@ func UpdateCounterPost(rw http.ResponseWriter, request *http.Request, metricsMem
 	}
 
 	err = metricsMemoryRepo.Update(statName, storage.MetricValue{
-		MType: "counter",
+		MType: storage.MeticTypeCounter,
 		Delta: &statValueInt,
 	})
 	if err != nil {
@@ -98,6 +127,7 @@ func UpdateCounterPost(rw http.ResponseWriter, request *http.Request, metricsMem
 
 func UpdateNotImplementedPost(rw http.ResponseWriter, request *http.Request) {
 	log.Println("Update not implemented statType")
+
 	rw.WriteHeader(http.StatusNotImplemented)
 	rw.Write([]byte("Not implemented"))
 }
@@ -105,18 +135,19 @@ func UpdateNotImplementedPost(rw http.ResponseWriter, request *http.Request) {
 func PrintStatsValues(rw http.ResponseWriter, request *http.Request, metricsMemoryRepo storage.MetricStorage, templatesPath string) {
 	t, err := template.ParseFiles(templatesPath)
 	if err != nil {
-		fmt.Println("Cant parse template ", err)
+		log.Println("Cant parse template ", err)
 		return
 	}
+
 	rw.Header().Set("Content-Type", "text/html; charset=utf-8")
 	err = t.Execute(rw, metricsMemoryRepo.ReadAll())
 	if err != nil {
-		fmt.Println("Cant render template ", err)
+		log.Println("Cant render template ", err)
 		return
 	}
 }
 
-func JSONStatValue(rw http.ResponseWriter, request *http.Request, metricsMemoryRepo storage.MetricStorage) {
+func JSONStatValue(rw http.ResponseWriter, request *http.Request, metricsMemoryRepo storage.MetricStorage, SignKey string) {
 	var InputMetricsJSON struct {
 		ID    string `json:"id" valid:"required"`
 		MType string `json:"type" valid:"required,in(counter|gauge)"`
@@ -140,11 +171,22 @@ func JSONStatValue(rw http.ResponseWriter, request *http.Request, metricsMemoryR
 		return
 	}
 
-	answerJSON := storage.Metric{
-		ID:    InputMetricsJSON.ID,
-		MType: statValue.MType,
-		Delta: statValue.Delta,
-		Value: statValue.Value,
+	answerJSON := struct {
+		storage.Metric
+		Hash string `json:"hash"`
+	}{
+		Metric: storage.Metric{
+			ID: InputMetricsJSON.ID,
+			MetricValue: storage.MetricValue{
+				MType: statValue.MType,
+				Delta: statValue.Delta,
+				Value: statValue.Value,
+			},
+		},
+	}
+
+	if SignKey != "" {
+		answerJSON.Hash = hex.EncodeToString(answerJSON.Metric.GetHash(InputMetricsJSON.ID, SignKey))
 	}
 
 	rw.Header().Set("Content-Type", "application/json")

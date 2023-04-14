@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"devops-tpl/internal/server/config"
 	"encoding/json"
 	"errors"
@@ -19,10 +21,8 @@ type MetricValue struct {
 }
 
 type Metric struct {
-	ID    string   `json:"id" valid:"required"`
-	MType string   `json:"type" valid:"required,in(counter|gauge)"`
-	Delta *int64   `json:"delta,omitempty"`
-	Value *float64 `json:"value,omitempty"`
+	ID string `json:"id" valid:"required"`
+	MetricValue
 }
 
 func (metric MetricValue) GetStringValue() string {
@@ -34,6 +34,26 @@ func (metric MetricValue) GetStringValue() string {
 	default:
 		return ""
 	}
+}
+
+func (metric MetricValue) GetHash(id, signKey string) []byte {
+	if signKey == "" {
+		return nil
+	}
+
+	var metricLabel string
+	switch metric.MType {
+	case MeticTypeGauge:
+		metricLabel = fmt.Sprintf("%s:gauge:%f", id, *metric.Value)
+	case MeticTypeCounter:
+		metricLabel = fmt.Sprintf("%s:counter:%d", id, *metric.Delta)
+	default:
+		return nil
+	}
+
+	signerHMAC := hmac.New(sha256.New, []byte(signKey))
+	signerHMAC.Write([]byte(metricLabel))
+	return signerHMAC.Sum(nil)
 }
 
 // MetricsMemoryRepo - репо для приходящей статистики
