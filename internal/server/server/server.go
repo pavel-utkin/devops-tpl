@@ -21,17 +21,36 @@ type Server struct {
 }
 
 func NewServer(config config.Config) *Server {
+	log.Println(config)
 	return &Server{
 		config: config,
 	}
 }
 
-func (server *Server) initStorage() {
-	metricsMemoryRepo := storage.NewMetricsMemoryRepo(server.config.Store)
-	if server.config.Store.Restore {
-		metricsMemoryRepo.InitFromFile()
+func (server *Server) selectStorage() storage.MetricStorage {
+	storageConfig := server.config.Store
+
+	log.Println("DB Storage LINE 33")
+	log.Println("DB Storage LINE 33" + storageConfig.DatabaseDSN)
+	if storageConfig.DatabaseDSN != "" {
+		log.Println("DB Storage")
+		repository, err := storage.NewDBRepo(storageConfig)
+		if err != nil {
+			panic(err)
+		}
+		return repository
 	}
 
+	log.Println("Memory Storage")
+	repository := storage.NewMetricsMemoryRepo(storageConfig)
+	if server.config.Store.Restore {
+		repository.InitFromFile()
+	}
+	return repository
+}
+
+func (server *Server) initStorage() {
+	metricsMemoryRepo := server.selectStorage()
 	server.storage = metricsMemoryRepo
 }
 
@@ -47,6 +66,10 @@ func (server *Server) initRouter() {
 	//Маршруты
 	router.Get("/", func(writer http.ResponseWriter, request *http.Request) {
 		handlers.PrintStatsValues(writer, request, server.storage, server.config.TemplatesAbsPath)
+	})
+
+	router.Get("/ping", func(writer http.ResponseWriter, request *http.Request) {
+		handlers.PingGet(writer, request, server.storage)
 	})
 
 	//json handler

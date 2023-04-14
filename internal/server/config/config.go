@@ -8,9 +8,10 @@ import (
 )
 
 type StoreConfig struct {
-	Interval time.Duration `env:"STORE_INTERVAL"`
-	File     string        `env:"STORE_FILE"`
-	Restore  bool          `env:"RESTORE"`
+	Interval    time.Duration `env:"STORE_INTERVAL"`
+	DatabaseDSN string        `env:"DATABASE_DSN"`
+	File        string        `env:"STORE_FILE"`
+	Restore     bool          `env:"RESTORE"`
 }
 
 type Config struct {
@@ -29,7 +30,7 @@ func newConfig() *Config {
 
 func (config *Config) initDefaultValues() {
 	config.ServerAddr = "127.0.0.1:8080"
-	config.TemplatesAbsPath = "./templates/index.html"
+	config.TemplatesAbsPath = "./templates"
 	config.Store = StoreConfig{
 		Interval: time.Duration(300) * time.Second,
 		File:     "/tmp/devops-metrics-db.json",
@@ -45,6 +46,7 @@ func (config *Config) parseFlags() {
 	flag.StringVar(&config.ServerAddr, "a", config.ServerAddr, "server address (host:port)")
 	flag.StringVar(&config.SignKey, "k", config.SignKey, "sign key")
 	flag.BoolVar(&config.Store.Restore, "r", config.Store.Restore, "restoring metrics from file")
+	flag.StringVar(&config.Store.DatabaseDSN, "d", config.Store.DatabaseDSN, "Database DSN")
 	flag.DurationVar(&config.Store.Interval, "i", config.Store.Interval, "store interval (example: 10s)")
 	flag.StringVar(&config.Store.File, "f", config.Store.File, "path to file for storage metrics")
 	flag.Parse()
