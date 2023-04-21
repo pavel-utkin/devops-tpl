@@ -6,6 +6,7 @@ import (
 	"devops-tpl/internal/agent/statsreader"
 	"log"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -30,32 +31,52 @@ func NewHTTPClient(config config.Config) *AppHTTP {
 }
 
 func (app *AppHTTP) Run() {
-	var metricsDump statsreader.MetricsDump
 	signalChanel := make(chan os.Signal, 1)
+	metricsDump, err := statsreader.NewMetricsDump()
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
 	app.timeLog.startTime = time.Now()
 	app.isRun = true
 
 	tickerStatisticsRefresh := time.NewTicker(app.config.PollInterval)
 	tickerStatisticsUpload := time.NewTicker(app.config.ReportInterval)
+	wgRefresh := sync.WaitGroup{}
 
 	for app.isRun {
 		select {
 		case timeTickerRefresh := <-tickerStatisticsRefresh.C:
-			log.Println("Refresh")
 			app.timeLog.lastRefreshTime = timeTickerRefresh
-			metricsDump.Refresh()
+			wgRefresh.Add(2)
+
+			// add worker pool pattern
+
+			go func() {
+				defer wgRefresh.Done()
+				metricsDump.Refresh()
+			}()
+			go func() {
+				err = metricsDump.RefreshExtra()
+				if err != nil {
+					log.Println(err)
+				}
+
+				defer wgRefresh.Done()
+			}()
 		case timeTickerUpload := <-tickerStatisticsUpload.C:
 			app.timeLog.lastUploadTime = timeTickerUpload
-			log.Println("Upload")
+			wgRefresh.Wait()
 
-			err := app.metricsUplader.MetricsUploadBatch(metricsDump)
-			if err != nil {
-				log.Println("Error!")
-				log.Println(err)
+			go func() {
+				err = app.metricsUplader.MetricsUploadBatch(*metricsDump)
+				if err != nil {
+					log.Println("cant upload metrics ", err)
 
-				app.Stop()
-			}
+					app.Stop()
+				}
+			}()
 		case osSignal := <-signalChanel:
 			switch osSignal {
 			case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT:

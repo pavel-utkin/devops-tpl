@@ -18,6 +18,7 @@ type Config struct {
 	PollInterval         time.Duration `env:"POLL_INTERVAL"`
 	ReportInterval       time.Duration `env:"REPORT_INTERVAL"`
 	SignKey              string        `env:"KEY"`
+	RateLimit            int           `env:"RATE_LIMIT"`
 	HTTPClientConnection HTTPClientConfig
 }
 
@@ -49,6 +50,7 @@ func (config *Config) parseFlags() {
 	flag.DurationVar(&config.PollInterval, "p", config.PollInterval, "poll interval (example: 10s)")
 	flag.StringVar(&config.HTTPClientConnection.ServerAddr, "a", config.HTTPClientConnection.ServerAddr, "server address (host:port)")
 	flag.StringVar(&config.SignKey, "k", config.SignKey, "sign key")
+	flag.IntVar(&config.RateLimit, "l", config.RateLimit, "number of concurrent requests to the server")
 	flag.Parse()
 }
 
