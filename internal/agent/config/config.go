@@ -59,6 +59,11 @@ func LoadConfig() Config {
 
 	config.parseFlags()
 	err := config.parseEnv()
+
+	if config.RateLimit == 0 {
+		config.RateLimit = 1
+	}
+
 	if err != nil {
 		log.Fatal(err)
 	}

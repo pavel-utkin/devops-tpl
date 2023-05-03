@@ -4,6 +4,7 @@ import (
 	"devops-tpl/internal/agent/config"
 	"devops-tpl/internal/agent/metricsuploader"
 	"devops-tpl/internal/agent/statsreader"
+	"golang.org/x/sync/errgroup"
 	"log"
 	"os"
 	"sync"
@@ -45,38 +46,47 @@ func (app *AppHTTP) Run() {
 	tickerStatisticsUpload := time.NewTicker(app.config.ReportInterval)
 	wgRefresh := sync.WaitGroup{}
 
+	workers := app.config.RateLimit
+
+	errorGroup := new(errgroup.Group)
 	for app.isRun {
 		select {
 		case timeTickerRefresh := <-tickerStatisticsRefresh.C:
 			app.timeLog.lastRefreshTime = timeTickerRefresh
 			wgRefresh.Add(2)
 
-			// add worker pool pattern
+			for i := 0; i < workers; i++ {
+				errorGroup.Go(func() error {
+					go func() {
+						defer wgRefresh.Done()
+						metricsDump.Refresh()
+					}()
+					go func() {
+						err = metricsDump.RefreshExtra()
+						if err != nil {
+							log.Println(err)
+						}
 
-			go func() {
-				defer wgRefresh.Done()
-				metricsDump.Refresh()
-			}()
-			go func() {
-				err = metricsDump.RefreshExtra()
-				if err != nil {
-					log.Println(err)
-				}
-
-				defer wgRefresh.Done()
-			}()
+						defer wgRefresh.Done()
+					}()
+					return nil
+				})
+			}
+			errorGroup.Wait()
 		case timeTickerUpload := <-tickerStatisticsUpload.C:
 			app.timeLog.lastUploadTime = timeTickerUpload
 			wgRefresh.Wait()
 
-			go func() {
-				err = app.metricsUplader.MetricsUploadBatch(*metricsDump)
-				if err != nil {
-					log.Println("cant upload metrics ", err)
+			for i := 0; i < workers; i++ {
+				go func() {
+					err = app.metricsUplader.MetricsUploadBatch(*metricsDump)
+					if err != nil {
+						log.Println("cant upload metrics ", err)
 
-					app.Stop()
-				}
-			}()
+						app.Stop()
+					}
+				}()
+			}
 		case osSignal := <-signalChanel:
 			switch osSignal {
 			case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT:
