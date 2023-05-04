@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/asaskevich/govalidator"
+	"log"
 	"net/http"
 )
 
@@ -70,18 +71,19 @@ func (server Server) UpdateMetricPostJSON(rw http.ResponseWriter, request *http.
 func (server Server) UpdateMetricBatchJSON(rw http.ResponseWriter, request *http.Request) {
 	rw.Header().Set("Content-Type", "application/json")
 
-	var MetricBatch []storage.Metric
+	var metrics []storage.Metric
 	response := responses.NewUpdateMetricResponse()
 
 	//JSON decoding
-	err := json.NewDecoder(request.Body).Decode(&MetricBatch)
+	log.Println(request.Body)
+	err := json.NewDecoder(request.Body).Decode(&metrics)
 	if err != nil {
 		http.Error(rw, response.SetStatusError(err).GetJSONString(), http.StatusBadRequest)
 		return
 	}
 
 	//Validation
-	for _, OneMetric := range MetricBatch {
+	for _, OneMetric := range metrics {
 		_, err = govalidator.ValidateStruct(OneMetric)
 		if err != nil {
 			http.Error(rw, response.SetStatusError(err).GetJSONString(), http.StatusBadRequest)
@@ -89,14 +91,15 @@ func (server Server) UpdateMetricBatchJSON(rw http.ResponseWriter, request *http
 		}
 	}
 
-	err = server.storage.UpdateManySliceMetric(MetricBatch)
+	err = server.storage.UpdateManySliceMetric(metrics)
 	if err != nil {
 		http.Error(rw, response.SetStatusError(err).GetJSONString(), http.StatusBadRequest)
 		return
 	}
 
 	rw.WriteHeader(http.StatusOK)
-	rw.Write(response.GetJSONBytes())
+	jsonBytes, _ := json.Marshal(&metrics)
+	rw.Write(jsonBytes)
 }
 
 func (server Server) MetricValuePostJSON(rw http.ResponseWriter, request *http.Request) {

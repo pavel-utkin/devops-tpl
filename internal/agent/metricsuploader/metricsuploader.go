@@ -1,20 +1,17 @@
 package metricsuploader
 
 import (
+	"devops-tpl/internal/agent/config"
+	"devops-tpl/internal/agent/statsreader"
+	"devops-tpl/internal/server/storage"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"reflect"
-	"strconv"
-	"strings"
-
-	"devops-tpl/internal/agent/config"
-	"devops-tpl/internal/agent/statsreader"
-	"devops-tpl/internal/server/storage"
 	"github.com/go-resty/resty/v2"
 	"golang.org/x/sync/errgroup"
+	"net/http"
+	"strconv"
 )
 
 type MetricsUplader struct {
@@ -128,17 +125,24 @@ func (metricsUplader *MetricsUplader) oneStatUploadJSON(mType string, name strin
 }
 
 func (metricsUplader *MetricsUplader) MetricsUpload(metricsDump statsreader.MetricsDump) error {
-	reflectMetricsDump := reflect.ValueOf(metricsDump)
-	typeOfMetricsDump := reflectMetricsDump.Type()
+	metricsDump.RLock()
+	defer metricsDump.RUnlock()
 	errorGroup := new(errgroup.Group)
 
-	for i := 0; i < reflectMetricsDump.NumField(); i++ {
-		metricName := typeOfMetricsDump.Field(i).Name
-		metricValue := fmt.Sprintf("%v", reflectMetricsDump.Field(i).Interface())
-		metricType := strings.Split(typeOfMetricsDump.Field(i).Type.String(), ".")[1]
+	for key, metricRawValue := range metricsDump.MetricsGauge {
+		metricName := key
+		metricValue := fmt.Sprintf("%v", metricRawValue)
+		errorGroup.Go(func() error {
+			return metricsUplader.oneStatUploadJSON("gauge", metricName, metricValue)
+		})
+	}
+
+	for key, metricRawValue := range metricsDump.MetricsCounter {
+		metricName := key
+		metricValue := fmt.Sprintf("%v", metricRawValue)
 
 		errorGroup.Go(func() error {
-			return metricsUplader.oneStatUploadJSON(metricType, metricName, metricValue)
+			return metricsUplader.oneStatUploadJSON("counter", metricName, metricValue)
 		})
 	}
 
@@ -147,16 +151,14 @@ func (metricsUplader *MetricsUplader) MetricsUpload(metricsDump statsreader.Metr
 }
 
 func (metricsUplader *MetricsUplader) MetricsUploadBatch(metricsDump statsreader.MetricsDump) error {
-	reflectMetricsDump := reflect.ValueOf(metricsDump)
-	typeOfMetricsDump := reflectMetricsDump.Type()
+	metricsDump.RLock()
+	defer metricsDump.RUnlock()
 	var MetricValueBatch []storage.Metric
 
-	for i := 0; i < reflectMetricsDump.NumField(); i++ {
-		metricName := typeOfMetricsDump.Field(i).Name
-		metricValue := fmt.Sprintf("%v", reflectMetricsDump.Field(i).Interface())
-		metricType := strings.Split(typeOfMetricsDump.Field(i).Type.String(), ".")[1]
+	for metricName, metricRawValue := range metricsDump.MetricsGauge {
+		metricValue := fmt.Sprintf("%v", metricRawValue)
 
-		mValue, err := newMetricValue(metricType, metricValue)
+		mValue, err := newMetricValue("gauge", metricValue)
 		if err != nil {
 			return err
 		}
@@ -166,6 +168,22 @@ func (metricsUplader *MetricsUplader) MetricsUploadBatch(metricsDump statsreader
 			MetricValue: mValue,
 		})
 	}
+
+	for metricName, metricRawValue := range metricsDump.MetricsCounter {
+		metricValue := fmt.Sprintf("%v", metricRawValue)
+
+		mValue, err := newMetricValue("counter", metricValue)
+		if err != nil {
+			return err
+		}
+
+		MetricValueBatch = append(MetricValueBatch, storage.Metric{
+			ID:          metricName,
+			MetricValue: mValue,
+		})
+	}
+
+	fmt.Println(MetricValueBatch)
 
 	statJSON, err := json.Marshal(MetricValueBatch)
 	if err != nil {
@@ -180,6 +198,7 @@ func (metricsUplader *MetricsUplader) MetricsUploadBatch(metricsDump statsreader
 		}).
 		Post("http://{addr}/updates/")
 
+	fmt.Println(err)
 	if err != nil {
 		return err
 	}
