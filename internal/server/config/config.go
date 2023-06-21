@@ -2,9 +2,10 @@ package config
 
 import (
 	"flag"
-	"github.com/caarlos0/env/v6"
 	"log"
 	"time"
+
+	"github.com/caarlos0/env/v6"
 )
 
 type StoreConfig struct {
@@ -16,6 +17,7 @@ type StoreConfig struct {
 
 type Config struct {
 	ServerAddr       string `env:"ADDRESS"`
+	ProfilingAddr    string
 	TemplatesAbsPath string `env:"TEMPLATES_ABS_PATH"`
 	SignKey          string `env:"KEY"`
 	Store            StoreConfig
@@ -30,6 +32,7 @@ func newConfig() *Config {
 
 func (config *Config) initDefaultValues() {
 	config.ServerAddr = "127.0.0.1:8080"
+	config.ProfilingAddr = "127.0.0.1:8090"
 	config.TemplatesAbsPath = "./templates"
 	config.Store = StoreConfig{
 		Interval: time.Duration(300) * time.Second,
