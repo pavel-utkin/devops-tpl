@@ -1,3 +1,4 @@
+// Package metricsuploader - HTTP клиент для отправки метрик на сервер.
 package metricsuploader
 
 import (
@@ -125,7 +126,38 @@ func (metricsUplader *MetricsUplader) oneStatUploadJSON(mType string, name strin
 	return nil
 }
 
-func (metricsUplader *MetricsUplader) MetricsUpload(metricsDump statsreader.MetricsDump) error {
+// MetricsUploadSync - конкурентная отправка метрик.
+// Deprecated: используйте MetricsUploadBatch
+func (metricsUplader *MetricsUplader) MetricsUploadSync(metricsDump statsreader.MetricsDump) (err error) {
+	metricsDump.RLock()
+	defer metricsDump.RUnlock()
+
+	for key, metricRawValue := range metricsDump.MetricsGauge {
+		metricName := key
+		metricValue := fmt.Sprintf("%v", metricRawValue)
+
+		err = metricsUplader.oneStatUploadJSON("gauge", metricName, metricValue)
+		if err != nil {
+			return
+		}
+	}
+
+	for key, metricRawValue := range metricsDump.MetricsCounter {
+		metricName := key
+		metricValue := fmt.Sprintf("%v", metricRawValue)
+
+		err = metricsUplader.oneStatUploadJSON("counter", metricName, metricValue)
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+// MetricsUploadAsync - конкурентная отправка метрик.
+// Deprecated: используйте MetricsUploadBatch
+func (metricsUplader *MetricsUplader) MetricsUploadAsync(metricsDump statsreader.MetricsDump) error {
 	metricsDump.RLock()
 	defer metricsDump.RUnlock()
 	errorGroup := new(errgroup.Group)
@@ -151,6 +183,7 @@ func (metricsUplader *MetricsUplader) MetricsUpload(metricsDump statsreader.Metr
 	return err
 }
 
+// MetricsUploadBatch - отправка метрик 1 запросом в формате JSON.
 func (metricsUplader *MetricsUplader) MetricsUploadBatch(metricsDump statsreader.MetricsDump) error {
 	metricsDump.RLock()
 	defer metricsDump.RUnlock()

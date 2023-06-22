@@ -1,11 +1,12 @@
+// HTTP сервер для runtime метрик
 package main
 
 import (
+	"context"
 	"devops-tpl/internal/server/config"
 	"devops-tpl/internal/server/server"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
 )
 
 func Profiling(addr string) {
@@ -15,6 +16,9 @@ func Profiling(addr string) {
 func main() {
 	config := config.LoadConfig()
 	server := server.NewServer(config)
-	go Profiling(server.Config().ProfilingAddr)
-	server.Run()
+
+	if server.Config().ProfilingAddr != "" {
+		go Profiling(server.Config().ProfilingAddr)
+	}
+	server.Run(context.Background())
 }

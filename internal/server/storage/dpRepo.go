@@ -14,6 +14,7 @@ import (
 	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
+// DBRepo - хранилище метрик в SQL БД.
 type DBRepo struct {
 	config config.StoreConfig
 	db     *sql.DB
@@ -249,7 +250,8 @@ func (repository DBRepo) Ping() error {
 func (repository DBRepo) InitFromFile() {
 	file, err := os.OpenFile(repository.config.File, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
-		panic(err.Error())
+		log.Println(err.Error())
+		//panic(err.Error())
 	}
 	defer file.Close()
 
