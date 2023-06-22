@@ -8,10 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-resty/resty/v2"
-	"golang.org/x/sync/errgroup"
 	"net/http"
 	"strconv"
+
+	"github.com/go-resty/resty/v2"
+	"golang.org/x/sync/errgroup"
 )
 
 type MetricsUplader struct {

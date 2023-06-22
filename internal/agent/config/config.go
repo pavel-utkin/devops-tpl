@@ -2,9 +2,10 @@ package config
 
 import (
 	"flag"
-	"github.com/caarlos0/env/v6"
 	"log"
 	"time"
+
+	"github.com/caarlos0/env/v6"
 )
 
 type HTTPClientConfig struct {

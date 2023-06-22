@@ -2,8 +2,9 @@ package storage
 
 import (
 	"devops-tpl/internal/server/config"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestMemoryRepoRW(t *testing.T) {

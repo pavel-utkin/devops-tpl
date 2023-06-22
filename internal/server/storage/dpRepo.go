@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	_ "github.com/jackc/pgx/v4/stdlib"
 	"log"
 	"os"
 	"time"
+
+	_ "github.com/jackc/pgx/v4/stdlib"
 )
 
 type DBRepo struct {
