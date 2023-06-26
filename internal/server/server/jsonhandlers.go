@@ -7,9 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/asaskevich/govalidator"
 	"log"
 	"net/http"
+
+	"github.com/asaskevich/govalidator"
 )
 
 func (server Server) UpdateMetricPostJSON(rw http.ResponseWriter, request *http.Request) {

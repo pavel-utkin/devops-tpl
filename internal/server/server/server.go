@@ -4,12 +4,13 @@ import (
 	"devops-tpl/internal/server/config"
 	"devops-tpl/internal/server/middleware"
 	"devops-tpl/internal/server/storage"
-	"github.com/go-chi/chi"
-	chimiddleware "github.com/go-chi/chi/middleware"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"time"
+
+	"github.com/go-chi/chi"
+	chimiddleware "github.com/go-chi/chi/middleware"
 )
 
 type Server struct {
