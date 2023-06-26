@@ -251,7 +251,6 @@ func (repository DBRepo) InitFromFile() {
 	file, err := os.OpenFile(repository.config.File, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		log.Println(err.Error())
-		//panic(err.Error())
 	}
 	defer file.Close()
 

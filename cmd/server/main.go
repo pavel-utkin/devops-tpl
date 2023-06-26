@@ -5,12 +5,21 @@ import (
 	"context"
 	"devops-tpl/internal/server/config"
 	"devops-tpl/internal/server/server"
-	"log"
+	"errors"
+	"fmt"
 	"net/http"
+	"os"
 )
 
 func Profiling(addr string) {
-	log.Fatal(http.ListenAndServe(addr, nil))
+	err := http.ListenAndServe(addr, nil)
+	if errors.Is(err, http.ErrServerClosed) {
+		fmt.Printf("server closed\n")
+	} else if err != nil {
+		fmt.Printf("error starting server: %s\n", err)
+		os.Exit(1)
+	}
+
 }
 
 func main() {

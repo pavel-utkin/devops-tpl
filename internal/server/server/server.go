@@ -37,7 +37,6 @@ func (server *Server) selectStorage() storage.MetricStorage {
 		repository, err := storage.NewDBRepo(storageConfig)
 		if err != nil {
 			log.Println(err)
-			//panic(err)
 		}
 
 		return repository
@@ -94,10 +93,7 @@ func (server *Server) Run(ctx context.Context) {
 	}
 
 	go func() {
-		err := serverHTTP.ListenAndServe()
-		if err != nil {
-			log.Println("HTTP server closed")
-		}
+		serverHTTP.ListenAndServe()
 	}()
 	<-ctx.Done()
 	err := serverHTTP.Close()

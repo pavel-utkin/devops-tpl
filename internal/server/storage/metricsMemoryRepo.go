@@ -201,7 +201,6 @@ func (mmr MetricsMemoryRepo) InitFromFile() {
 	file, err := os.OpenFile(mmr.config.File, os.O_RDONLY|os.O_CREATE, 0777)
 	if err != nil {
 		fmt.Println(err.Error())
-		//panic(err.Error())
 	}
 	defer file.Close()
 
