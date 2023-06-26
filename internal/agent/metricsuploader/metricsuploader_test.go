@@ -6,8 +6,9 @@ import (
 	"devops-tpl/internal/agent/statsreader"
 	serverCfg "devops-tpl/internal/server/config"
 	"devops-tpl/internal/server/server"
-	"github.com/stretchr/testify/suite"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type UploaderTestingSuite struct {

@@ -2,7 +2,6 @@ package statsreader
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"testing"
 
