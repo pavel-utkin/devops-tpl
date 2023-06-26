@@ -4,12 +4,13 @@ import (
 	"devops-tpl/internal/agent/config"
 	"devops-tpl/internal/agent/metricsuploader"
 	"devops-tpl/internal/agent/statsreader"
-	"golang.org/x/sync/errgroup"
 	"log"
 	"os"
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 )
 
 type AppHTTP struct {
@@ -82,8 +83,6 @@ func (app *AppHTTP) Run() {
 					err = app.metricsUplader.MetricsUploadBatch(*metricsDump)
 					if err != nil {
 						log.Println("cant upload metrics ", err)
-
-						app.Stop()
 					}
 				}()
 			}
