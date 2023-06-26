@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"devops-tpl/internal/server/config"
 	"devops-tpl/internal/server/middleware"
 	"devops-tpl/internal/server/storage"
@@ -35,7 +36,7 @@ func (server *Server) selectStorage() storage.MetricStorage {
 		log.Println("DB Storage")
 		repository, err := storage.NewDBRepo(storageConfig)
 		if err != nil {
-			panic(err)
+			log.Println(err)
 		}
 
 		return repository
@@ -59,8 +60,6 @@ func (server *Server) initStorage() {
 func (server *Server) initRouter() {
 	router := chi.NewRouter()
 
-	//router.Use(chimiddleware.RequestID)
-	//router.Use(chimiddleware.RealIP)
 	router.Use(chimiddleware.Logger)
 	router.Use(chimiddleware.Recoverer)
 	router.Use(middleware.GzipHandle)
@@ -83,12 +82,24 @@ func (server *Server) initRouter() {
 	server.chiRouter = router
 }
 
-func (server *Server) Run() {
+func (server *Server) Run(ctx context.Context) {
 	server.initStorage()
 	defer server.storage.Close()
-	server.initRouter()
 
-	log.Fatal(http.ListenAndServe(server.config.ServerAddr, server.chiRouter))
+	server.initRouter()
+	serverHTTP := &http.Server{
+		Addr:    server.config.ServerAddr,
+		Handler: server.chiRouter,
+	}
+
+	go func() {
+		serverHTTP.ListenAndServe()
+	}()
+	<-ctx.Done()
+	err := serverHTTP.Close()
+	if err != nil {
+		log.Println("HTTP server stop error")
+	}
 }
 
 func (server *Server) Config() (config config.Config) {

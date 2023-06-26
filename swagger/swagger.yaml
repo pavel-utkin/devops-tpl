@@ -1,0 +1,190 @@
+definitions:
+  storage.Metric:
+    properties:
+      delta:
+        type: integer
+      id:
+        type: string
+      type:
+        type: string
+      value:
+        type: number
+    type: object
+info:
+  contact: {}
+paths:
+  /:
+    get:
+      operationId: printAllMetricStatic
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+      summary: Metric list
+      tags:
+      - Static
+  /ping:
+    get:
+      operationId: pingGetJSON
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "500":
+          description: Internal Server Error
+      summary: Ping
+  /update/:
+    post:
+      operationId: updateMetricPostJSON
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+      summary: Update metric value
+      tags:
+      - Update
+  /update/{statType}/{statName}/{statValue}:
+    post:
+      operationId: updateNotImplementedPost
+      parameters:
+      - default: gauge
+        description: Тип метрики
+        enum:
+        - gauge
+        - counter
+        in: query
+        name: statType
+        type: string
+      - description: Имя метрики
+        in: query
+        name: statName
+        type: string
+      - description: Значение
+        in: query
+        name: statValue
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "501":
+          description: Not Implemented
+      summary: Update not implemented
+      tags:
+      - Update
+  /update/counter/{statName}/{statValue}:
+    post:
+      operationId: updateCounterPost
+      parameters:
+      - description: Имя метрики
+        in: query
+        name: statName
+        type: string
+      - description: Значение
+        in: query
+        name: statValue
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: Update counter metric
+      tags:
+      - Update
+  /update/gauge/{statName}/{statValue}:
+    post:
+      operationId: updateGaugePost
+      parameters:
+      - description: Имя метрики
+        in: query
+        name: statName
+        type: string
+      - description: Значение
+        in: query
+        name: statValue
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "500":
+          description: Internal Server Error
+      summary: Update gauge metric
+      tags:
+      - Update
+  /updates/:
+    post:
+      operationId: updateMetricBatchJSON
+      parameters:
+      - description: JSON
+        in: body
+        name: JSON
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/storage.Metric'
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+      summary: Update metric value using batch JSON
+      tags:
+      - Update
+  /value/:
+    post:
+      operationId: metricValuePostJSON
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+        "404":
+          description: Not Found
+      summary: Metric value JSON
+      tags:
+      - Value
+  /value/{statType}/{statName}:
+    get:
+      operationId: printMetricGet
+      parameters:
+      - default: gauge
+        description: Тип метрики
+        enum:
+        - gauge
+        - counter
+        in: query
+        name: statType
+        type: string
+      - description: Имя метрики
+        in: query
+        name: statName
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+        "404":
+          description: Not Found
+      summary: Metric value
+      tags:
+      - Value
+swagger: "2.0"
