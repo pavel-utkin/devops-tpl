@@ -7,10 +7,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/asaskevich/govalidator"
 	"log"
 	"net/http"
-
-	"github.com/asaskevich/govalidator"
 )
 
 // UpdateMetricPostJSON
@@ -53,7 +52,8 @@ func (server Server) UpdateMetricPostJSON(rw http.ResponseWriter, request *http.
 	//Check sign
 	var metricHash []byte
 	if server.config.SignKey != "" {
-		requestMetricHash, err := hex.DecodeString(inputJSON.Hash)
+		var requestMetricHash []byte
+		requestMetricHash, err = hex.DecodeString(inputJSON.Hash)
 		if err != nil {
 			http.Error(rw, response.SetStatusError(err).GetJSONString(), http.StatusBadRequest)
 			return
@@ -169,7 +169,7 @@ func (server Server) MetricValuePostJSON(rw http.ResponseWriter, request *http.R
 	}
 
 	if server.config.SignKey != "" {
-		answerJSON.Hash = hex.EncodeToString(answerJSON.Metric.GetHash(inputMetricsJSON.ID, server.config.SignKey))
+		answerJSON.Hash = hex.EncodeToString(answerJSON.GetHash(inputMetricsJSON.ID, server.config.SignKey))
 	}
 
 	rw.WriteHeader(http.StatusOK)
