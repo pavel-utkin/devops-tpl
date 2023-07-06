@@ -10,6 +10,10 @@ import (
 	"net/http"
 )
 
+var buildVersion = "N/A"
+var buildDate = "N/A"
+var buildCommit = "N/A"
+
 func Profiling(addr string) {
 	err := http.ListenAndServe(addr, nil)
 	if errors.Is(err, http.ErrServerClosed) {
@@ -20,6 +24,11 @@ func Profiling(addr string) {
 }
 
 func main() {
+
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
+
 	config := config.LoadConfig()
 	server := server.NewServer(config)
 

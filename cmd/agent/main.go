@@ -4,7 +4,12 @@ package main
 import (
 	"devops-tpl/internal/agent"
 	"devops-tpl/internal/agent/config"
+	"fmt"
 )
+
+var buildVersion = "N/A"
+var buildDate = "N/A"
+var buildCommit = "N/A"
 
 // @Title Client-server metrics
 // @Description Сервис сбора и хранения метрик
@@ -26,6 +31,11 @@ import (
 // @Tag.description "Группа эндпоинтов со статикой"
 
 func main() {
+
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
+
 	config := config.LoadConfig()
 	app := agent.NewHTTPClient(config)
 	app.Run()
