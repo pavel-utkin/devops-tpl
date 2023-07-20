@@ -26,6 +26,8 @@ type Config struct {
 	PollInterval time.Duration `env:"POLL_INTERVAL"`
 	// ReportInterval - интервал между отправки метрик (flag: r; default: 2s)
 	ReportInterval time.Duration `env:"REPORT_INTERVAL"`
+	// PublicKeyRSA - публичный RSA ключ (flag: crypto-key)
+	PublicKeyRSA string `env:"CRYPTO_KEY"`
 	// SignKey - ключ для подписи сообщений (flag: k)
 	SignKey string `env:"KEY"`
 	// RateLimit
@@ -64,6 +66,7 @@ func (config *Config) parseEnv() error {
 func (config *Config) parseFlags() {
 	flag.DurationVar(&config.ReportInterval, "r", config.ReportInterval, "report interval (example: 10s)")
 	flag.DurationVar(&config.PollInterval, "p", config.PollInterval, "poll interval (example: 10s)")
+	flag.StringVar(&config.PublicKeyRSA, "crypto-key", config.PublicKeyRSA, "RSA public key")
 	flag.StringVar(&config.HTTPClientConnection.ServerAddr, "a", config.HTTPClientConnection.ServerAddr, "server address (host:port)")
 	flag.StringVar(&config.SignKey, "k", config.SignKey, "sign key")
 	flag.IntVar(&config.RateLimit, "l", config.RateLimit, "number of concurrent requests to the server")
