@@ -10,6 +10,7 @@ type MetricMap map[string]MetricValue
 
 type MetricStorage interface {
 	InitFromFile()
+	Save() error
 	Update(key string, value MetricValue) error
 	UpdateManySliceMetric(MetricBatch []Metric) error
 	UpdateMany(DBSchema map[string]MetricValue) error

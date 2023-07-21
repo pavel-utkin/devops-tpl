@@ -2,9 +2,13 @@
 package main
 
 import (
+	"context"
 	"devops-tpl/internal/agent"
 	"devops-tpl/internal/agent/config"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 var buildVersion = "N/A"
@@ -32,11 +36,14 @@ var buildCommit = "N/A"
 
 func main() {
 
+	ctx, ctxCancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+	defer ctxCancel()
+
 	fmt.Printf("Build version: %s\n", buildVersion)
 	fmt.Printf("Build date: %s\n", buildDate)
 	fmt.Printf("Build commit: %s\n", buildCommit)
 
 	config := config.LoadConfig()
 	app := agent.NewHTTPClient(config)
-	app.Run()
+	app.Run(ctx)
 }

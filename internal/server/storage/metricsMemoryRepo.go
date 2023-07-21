@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const syncUploadSymbol = time.Duration(0)
+const SyncUploadSymbol = time.Duration(0)
 
 type MetricValue struct {
 	MType string   `json:"type" valid:"required,in(counter|gauge)"`
@@ -80,7 +80,7 @@ func NewMetricsMemoryRepo(config config.StoreConfig) MetricsMemoryRepo {
 		panic("counterMemoryRepo init error")
 	}
 
-	if mmr.config.Interval != syncUploadSymbol {
+	if mmr.config.Interval != SyncUploadSymbol {
 		mmr.IterativeUploadToFile()
 	}
 
@@ -117,7 +117,7 @@ func (mmr MetricsMemoryRepo) updateGaugeValue(key string, newMetricValue MetricV
 		return err
 	}
 
-	if mmr.config.Interval == syncUploadSymbol {
+	if mmr.config.Interval == SyncUploadSymbol {
 		return mmr.UploadToFile()
 	}
 
@@ -141,7 +141,7 @@ func (mmr MetricsMemoryRepo) updateCounterValue(key string, newMetricValue Metri
 	mmr.counterStorage.Write(key, newMetricValue)
 	mmr.uploadMutex.Unlock()
 
-	if mmr.config.Interval == syncUploadSymbol {
+	if mmr.config.Interval == SyncUploadSymbol {
 		return mmr.UploadToFile()
 	}
 
@@ -178,6 +178,10 @@ func (mmr MetricsMemoryRepo) UploadToFile() error {
 	}
 
 	return nil
+}
+
+func (mmr MetricsMemoryRepo) Save() error {
+	return mmr.UploadToFile()
 }
 
 func (mmr MetricsMemoryRepo) IterativeUploadToFile() {
