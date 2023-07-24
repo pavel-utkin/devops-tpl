@@ -330,3 +330,7 @@ func (repository DBRepo) readAllGauge() (map[string]MetricValue, error) {
 
 	return allValues, nil
 }
+
+func (repository DBRepo) Save() error {
+	return nil
+}

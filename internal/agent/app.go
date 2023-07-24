@@ -1,13 +1,12 @@
 package agent
 
 import (
+	"context"
 	"devops-tpl/internal/agent/config"
 	"devops-tpl/internal/agent/metricsuploader"
 	"devops-tpl/internal/agent/statsreader"
 	"log"
-	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -32,8 +31,17 @@ func NewHTTPClient(config config.Config) *AppHTTP {
 	return &app
 }
 
-func (app *AppHTTP) Run() {
-	signalChanel := make(chan os.Signal, 1)
+func uploadMetrics(app *AppHTTP, metricsDump *statsreader.MetricsDump, wgRefresh *sync.WaitGroup) {
+	wgRefresh.Wait()
+	go func() {
+		err := app.metricsUplader.MetricsUploadBatch(*metricsDump)
+		if err != nil {
+			log.Println(err)
+		}
+	}()
+}
+
+func (app *AppHTTP) Run(ctx context.Context) {
 	metricsDump, err := statsreader.NewMetricsDump()
 	if err != nil {
 		log.Println(err)
@@ -86,11 +94,9 @@ func (app *AppHTTP) Run() {
 					}
 				}()
 			}
-		case osSignal := <-signalChanel:
-			switch osSignal {
-			case syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT:
-				log.Println("syscall: " + osSignal.String())
-			}
+		case <-ctx.Done():
+			uploadMetrics(app, metricsDump, &wgRefresh)
+			wgRefresh.Wait()
 			app.Stop()
 		}
 	}
