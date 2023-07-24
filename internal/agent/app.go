@@ -27,7 +27,7 @@ type AppHTTP struct {
 func NewHTTPClient(config config.Config) *AppHTTP {
 	var app AppHTTP
 	app.config = config
-	app.metricsUplader = metricsuploader.NewMetricsUploader(app.config.HTTPClientConnection, app.config.SignKey)
+	app.metricsUplader = metricsuploader.NewMetricsUploader(app.config.HTTPClientConnection, app.config.SignKey, app.config.PublicKeyRSA)
 
 	return &app
 }
