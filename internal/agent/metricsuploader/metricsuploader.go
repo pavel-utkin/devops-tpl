@@ -3,8 +3,6 @@ package metricsuploader
 
 import (
 	"crypto/rsa"
-	"crypto/tls"
-	"crypto/x509"
 	"devops-tpl/internal/agent/config"
 	"devops-tpl/internal/agent/statsreader"
 	handlerRSA "devops-tpl/internal/rsa"
@@ -15,7 +13,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/go-resty/resty/v2"
@@ -70,35 +67,10 @@ func NewMetricsUploader(config config.HTTPClientConfig, signKey, publicKeyRSA st
 		var err error
 		metricsUplader.publicKeyRSA, err = handlerRSA.ParsePublicKeyRSA(publicKeyRSA)
 		if err != nil {
-			log.Fatal("Parsing public key failed, RSA disabled")
+			log.Fatal("Parsing public key failed, RSA disabled ", err)
 		}
 	}
-
-	err := metricsUplader.addCertCA()
-	if err != nil {
-		log.Println("Error while adding CA: ", err)
-		return &metricsUplader
-	}
-
 	return &metricsUplader
-}
-
-func (metricsUplader *MetricsUplader) addCertCA() (err error) {
-	caCert, err := os.ReadFile("./keysSSL/server.crt")
-	if err != nil {
-		return
-	}
-
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-
-	metricsUplader.client.SetTransport(&http.Transport{
-		TLSClientConfig: &tls.Config{
-			RootCAs: caCertPool,
-		},
-	})
-
-	return
 }
 
 // oneStatUploadJSON - отправка 1 метрики.

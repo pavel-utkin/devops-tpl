@@ -38,7 +38,7 @@ func NewServer(config config.Config) (server *Server) {
 		server.privateKeyRSA, err = handlerRSA.ParsePrivateKeyRSA(config.PrivateKeyRSA)
 	}
 	if err != nil {
-		log.Fatal("Parsing RSA key error")
+		log.Fatal("Parsing RSA key error ", err)
 	}
 	return
 }
@@ -101,7 +101,7 @@ func (server *Server) initRouter() {
 	server.chiRouter = router
 }
 
-func (server *Server) Run(ctx context.Context) (err error) {
+func (server *Server) Run(ctx context.Context) {
 	server.initStorage()
 	defer server.storage.Close()
 
@@ -115,18 +115,18 @@ func (server *Server) Run(ctx context.Context) (err error) {
 	eventServerStopped.Add(1)
 	go func() {
 		<-ctx.Done()
-		if err = serverHTTP.Shutdown(context.Background()); err != nil {
+		defer eventServerStopped.Done()
+		if err := serverHTTP.Shutdown(context.Background()); err != nil {
 			log.Printf("HTTP server shutdown error: %v", err)
 		}
 		if server.config.Store.Interval != storage.SyncUploadSymbol {
-			err = server.storage.Save()
+			err := server.storage.Save()
 			if err != nil {
 				log.Println(err)
 			}
 		}
-		eventServerStopped.Done()
 	}()
-	err = serverHTTP.ListenAndServeTLS("./keysSSL/server.crt", "./keysSSL/server.key")
+	err := serverHTTP.ListenAndServeTLS("./keysSSL/server.crt", "./keysSSL/server.key")
 	if errors.Is(err, fs.ErrNotExist) {
 		log.Println("SSL keys not found, using HTTP")
 		err = serverHTTP.ListenAndServe()
@@ -136,7 +136,6 @@ func (server *Server) Run(ctx context.Context) (err error) {
 		eventServerStopped.Wait()
 		log.Println("Server stopped successfully")
 	}
-	return
 }
 
 func (server *Server) Config() (config config.Config) {

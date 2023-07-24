@@ -17,6 +17,9 @@ func ParsePublicKeyRSA(path string) (*rsa.PublicKey, error) {
 	}
 
 	block, _ := pem.Decode(bytes)
+	if block == nil || block.Type != "PUBLIC KEY" {
+		log.Fatal("failed to decode PEM block containing public key")
+	}
 	pub, err := x509.ParsePKCS1PublicKey(block.Bytes)
 	if err != nil {
 		return nil, err
@@ -32,6 +35,9 @@ func ParsePrivateKeyRSA(path string) (*rsa.PrivateKey, error) {
 	}
 
 	block, _ := pem.Decode(bytes)
+	if block == nil || block.Type != "PRIVATE KEY" {
+		log.Fatal("failed to decode PEM block containing private key")
+	}
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
 		return nil, err
@@ -45,7 +51,7 @@ func EncryptWithPublicKey(msg []byte, pub *rsa.PublicKey) []byte {
 	hash := sha512.New()
 	ciphertext, err := rsa.EncryptOAEP(hash, rand.Reader, pub, msg, nil)
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
 	return ciphertext
 }
@@ -55,7 +61,7 @@ func DecryptWithPrivateKey(ciphertext []byte, priv *rsa.PrivateKey) []byte {
 	hash := sha512.New()
 	plaintext, err := rsa.DecryptOAEP(hash, rand.Reader, priv, ciphertext, nil)
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
 	return plaintext
 }
