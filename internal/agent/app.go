@@ -19,8 +19,9 @@ type AppHTTP struct {
 		lastRefreshTime time.Time
 		lastUploadTime  time.Time
 	}
-	metricsUplader *metricsuploader.MetricsUplader
-	config         config.Config
+	metricsUplader      *metricsuploader.MetricsUplader
+	metricsUploaderGRPC *metricsuploader.MetricsUploaderGRPC
+	config              config.Config
 }
 
 func NewHTTPClient(config config.Config) *AppHTTP {
@@ -28,12 +29,25 @@ func NewHTTPClient(config config.Config) *AppHTTP {
 	app.config = config
 	app.metricsUplader = metricsuploader.NewMetricsUploader(app.config.HTTPClientConnection, app.config.SignKey, app.config.PublicKeyRSA)
 
+	if config.ServerGRPCAddr != "" {
+		var err error
+		app.metricsUploaderGRPC, err = metricsuploader.NewMetricsUploaderGRPC(app.config.ServerGRPCAddr)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	return &app
 }
 
 func uploadMetrics(app *AppHTTP, metricsDump *statsreader.MetricsDump, wgRefresh *sync.WaitGroup) {
 	wgRefresh.Wait()
 	go func() {
+		if app.metricsUploaderGRPC != nil {
+			log.Println(app.metricsUploaderGRPC.Upload(*metricsDump))
+			return
+		}
 		err := app.metricsUplader.MetricsUploadBatch(*metricsDump)
 		if err != nil {
 			log.Println(err)

@@ -36,6 +36,8 @@ type Config struct {
 	RateLimit int `env:"RATE_LIMIT" json:"rate_limit,omitempty"`
 	// LogFile - лог файл (flag: l)
 	LogFile string `env:"LOG_FILE" json:"log_file,omitempty"`
+	// ServerGRPCAddr - адрес gRPC сервера (если значение установлено, то вместо HTTP будет использоваться gRPC)
+	ServerGRPCAddr string `env:"ADDRESS_GRPC" json:"address_grpc,omitempty"`
 	// DebugMode - debug мод (flag: d)
 	DebugMode            bool `env:"DEBUG"  json:"debug,omitempty"`
 	HTTPClientConnection HTTPClientConfig

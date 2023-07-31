@@ -3,13 +3,15 @@ package storage
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"log"
+	"os"
 	"testing"
 
 	"devops-tpl/internal/server/config"
-
-	"github.com/stretchr/testify/require"
 )
+
+const TempMemoryRepoFilePath = "tempMemoryRepoFilePath"
 
 func ExampleMemoryRepo() {
 	memoryRepo, err := NewMemoryRepo()
@@ -175,14 +177,27 @@ func TestMemoryRepoReadAll(t *testing.T) {
 }
 
 func TestMemoryRepoFileIterativeWrite(t *testing.T) {
-	metricsMemoryRepo := NewMetricsMemoryRepo(config.StoreConfig{})
+	metricsMemoryRepo := NewMetricsMemoryRepo(config.StoreConfig{
+		File: TempMemoryRepoFilePath,
+	})
 
-	err := metricsMemoryRepo.Ping()
+	repoFile, err := os.OpenFile(TempMemoryRepoFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	require.NoError(t, err)
+	metricsMemoryRepo.InitFromFile()
+
+	err = metricsMemoryRepo.Ping()
 	require.NoError(t, err)
 
 	metricsMemoryRepo.IterativeUploadToFile()
+	err = metricsMemoryRepo.Save()
+	require.NoError(t, err)
 
 	err = metricsMemoryRepo.Close()
+	require.NoError(t, err)
+
+	err = repoFile.Close()
+	require.NoError(t, err)
+	err = os.Remove(TempMemoryRepoFilePath)
 	require.NoError(t, err)
 }
 

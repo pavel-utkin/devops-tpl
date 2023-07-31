@@ -5,18 +5,21 @@ import (
 	"crypto/rsa"
 	handlerRSA "devops-tpl/internal/rsa"
 	"devops-tpl/internal/server/config"
+	grpcServices "devops-tpl/internal/server/grpc"
 	"devops-tpl/internal/server/middleware"
 	"devops-tpl/internal/server/storage"
+	pb "devops-tpl/proto"
 	"errors"
+	"github.com/go-chi/chi"
+	chimiddleware "github.com/go-chi/chi/middleware"
+	"google.golang.org/grpc"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"sync"
 	"time"
-
-	"github.com/go-chi/chi"
-	chimiddleware "github.com/go-chi/chi/middleware"
 )
 
 type Server struct {
@@ -25,12 +28,14 @@ type Server struct {
 	config        config.Config
 	privateKeyRSA *rsa.PrivateKey
 	startTime     time.Time
+	serverGRPC    *grpc.Server
 }
 
 func NewServer(config config.Config) (server *Server) {
 	var err error
 	server = &Server{
-		config: config,
+		config:     config,
+		serverGRPC: grpc.NewServer(),
 	}
 	log.Println(server.config)
 
@@ -106,6 +111,24 @@ func (server *Server) initRouter() {
 	server.chiRouter = router
 }
 
+func (server *Server) RunServerGRPC() (err error) {
+	lis, err := net.Listen("tcp", server.config.ServerGRPCAddr)
+	if err != nil {
+		return
+	}
+
+	pb.RegisterMetricsServer(server.serverGRPC, grpcServices.NewMetricsService(server.storage))
+
+	go func() {
+		err = server.serverGRPC.Serve(lis)
+		if err != nil {
+			log.Println(err)
+		}
+	}()
+
+	return
+}
+
 func (server *Server) Run(ctx context.Context) {
 	server.initStorage()
 	defer server.storage.Close()
@@ -124,6 +147,7 @@ func (server *Server) Run(ctx context.Context) {
 		if err := serverHTTP.Shutdown(context.Background()); err != nil {
 			log.Printf("HTTP server shutdown error: %v", err)
 		}
+		server.serverGRPC.GracefulStop()
 		if server.config.Store.Interval != storage.SyncUploadSymbol {
 			err := server.storage.Save()
 			if err != nil {
@@ -131,6 +155,14 @@ func (server *Server) Run(ctx context.Context) {
 			}
 		}
 	}()
+
+	if server.config.ServerGRPCAddr != "" {
+		err := server.RunServerGRPC()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	err := serverHTTP.ListenAndServeTLS("./keysSSL/server.crt", "./keysSSL/server.key")
 	if errors.Is(err, fs.ErrNotExist) {
 		log.Println("SSL keys not found, using HTTP")
