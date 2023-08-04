@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func NewSubNetHandle(TrustedSubNetStr string) func(next http.Handler) http.Handler {
+func NewSubNetHandle(trustedSubNet *net.IPNet) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ipStr := r.Header.Get("X-Real-IP")
@@ -19,9 +19,7 @@ func NewSubNetHandle(TrustedSubNetStr string) func(next http.Handler) http.Handl
 				return
 			}
 
-			_, TrustedSubNet, _ := net.ParseCIDR(TrustedSubNetStr)
-
-			if !TrustedSubNet.Contains(clientIP) {
+			if !trustedSubNet.Contains(clientIP) {
 				http.Error(w, response.SetStatusError(errors.New("client IP is not in trusted subnet")).GetJSONString(), http.StatusForbidden)
 				return
 			}

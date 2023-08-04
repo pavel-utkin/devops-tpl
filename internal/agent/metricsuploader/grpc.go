@@ -2,6 +2,7 @@ package metricsuploader
 
 import (
 	"context"
+	"log"
 
 	"devops-tpl/internal/agent/statsreader"
 	pb "devops-tpl/proto"
@@ -26,7 +27,7 @@ func NewMetricsUploaderGRPC(addr string) (*MetricsUploaderGRPC, error) {
 	}, nil
 }
 
-func (m *MetricsUploaderGRPC) Upload(metricsDump statsreader.MetricsDump) (err error) {
+func (m *MetricsUploaderGRPC) Upload(ctx context.Context, metricsDump statsreader.MetricsDump) (err error) {
 	updateMetricsRequest := pb.UpdateMetricsRequest{}
 
 	for metricID, metricValue := range metricsDump.MetricsGauge {
@@ -51,9 +52,9 @@ func (m *MetricsUploaderGRPC) Upload(metricsDump statsreader.MetricsDump) (err e
 		})
 	}
 
-	_, err = m.client.UpdateMetrics(context.Background(), &updateMetricsRequest)
+	_, err = m.client.UpdateMetrics(ctx, &updateMetricsRequest)
 	if err != nil {
-		return
+		log.Println("GRPC UpdateMetrics error : ", err)
 	}
 
 	return

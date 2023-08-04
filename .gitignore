@@ -17,9 +17,6 @@ cmd/agent/agent
 cmd/server/main
 cmd/server/server
 
-# proto (disabled, becouse of autotests)
-#/proto/*.pb.go
-
 # Dependency directories (remove the comment below to include it)
 vendor/
 

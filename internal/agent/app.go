@@ -41,11 +41,11 @@ func NewHTTPClient(config config.Config) *AppHTTP {
 	return &app
 }
 
-func uploadMetrics(app *AppHTTP, metricsDump *statsreader.MetricsDump, wgRefresh *sync.WaitGroup) {
+func uploadMetrics(ctx context.Context, app *AppHTTP, metricsDump *statsreader.MetricsDump, wgRefresh *sync.WaitGroup) {
 	wgRefresh.Wait()
 	go func() {
 		if app.metricsUploaderGRPC != nil {
-			log.Println(app.metricsUploaderGRPC.Upload(*metricsDump))
+			log.Println(app.metricsUploaderGRPC.Upload(ctx, *metricsDump))
 			return
 		}
 		err := app.metricsUplader.MetricsUploadBatch(*metricsDump)
@@ -109,7 +109,7 @@ func (app *AppHTTP) Run(ctx context.Context) {
 				}()
 			}
 		case <-ctx.Done():
-			uploadMetrics(app, metricsDump, &wgRefresh)
+			uploadMetrics(ctx, app, metricsDump, &wgRefresh)
 			wgRefresh.Wait()
 			app.Stop()
 		}

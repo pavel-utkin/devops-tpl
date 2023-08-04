@@ -69,6 +69,7 @@ func NewMetricsUploader(config config.HTTPClientConfig, signKey, publicKeyRSA st
 
 	currentIP, err := metricsUplader.IP()
 	if err != nil {
+		log.Println("metricsUplader IP error : ", err)
 		currentIP = ""
 	}
 	client.Header.Add("X-Real-IP", currentIP)

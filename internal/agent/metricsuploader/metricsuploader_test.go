@@ -52,8 +52,7 @@ func (suite *UploaderTestingSuite) TestUploadGRPC() {
 	metricsDump.Refresh()
 
 	suite.NotNil(metricsDump)
-	err = suite.metricsUploaderGRPC.Upload(*metricsDump)
-	suite.NoError(err)
+	suite.metricsUploaderGRPC.Upload(context.Background(), *metricsDump)
 }
 
 func (suite *UploaderTestingSuite) TestUploadOne() {

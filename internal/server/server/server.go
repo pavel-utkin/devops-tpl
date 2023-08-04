@@ -89,7 +89,11 @@ func (server *Server) initRouter() {
 	}
 
 	if server.config.TrustedSubNet != "" {
-		SubNetHandle := middleware.NewSubNetHandle(server.config.TrustedSubNet)
+		_, trustedSubNet, err := net.ParseCIDR(server.config.TrustedSubNet)
+		if err != nil {
+			log.Fatal("net.ParseCIDR error : ", err)
+		}
+		SubNetHandle := middleware.NewSubNetHandle(trustedSubNet)
 		router.Use(SubNetHandle)
 	}
 
@@ -114,7 +118,8 @@ func (server *Server) initRouter() {
 func (server *Server) RunServerGRPC() (err error) {
 	lis, err := net.Listen("tcp", server.config.ServerGRPCAddr)
 	if err != nil {
-		return
+		log.Println("net.Listen tcp error", err)
+		return err
 	}
 
 	pb.RegisterMetricsServer(server.serverGRPC, grpcServices.NewMetricsService(server.storage))
@@ -122,11 +127,16 @@ func (server *Server) RunServerGRPC() (err error) {
 	go func() {
 		err = server.serverGRPC.Serve(lis)
 		if err != nil {
-			log.Println(err)
+			log.Println("serverGRPC.Serve : ", err)
 		}
 	}()
 
-	return
+	if err != nil {
+		log.Println("RunServerGRPC error : ", err)
+		return err
+	}
+
+	return nil
 }
 
 func (server *Server) Run(ctx context.Context) {
