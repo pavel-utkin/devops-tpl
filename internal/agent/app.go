@@ -12,6 +12,15 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type MUploader interface {
+	uploadMetricts()
+}
+
+type MetricUploader struct {
+	metricsUplader      *metricsuploader.MetricsUplader
+	metricsUploaderGRPC *metricsuploader.MetricsUploaderGRPC
+}
+
 type AppHTTP struct {
 	isRun   bool
 	timeLog struct {
@@ -19,19 +28,18 @@ type AppHTTP struct {
 		lastRefreshTime time.Time
 		lastUploadTime  time.Time
 	}
-	metricsUplader      *metricsuploader.MetricsUplader
-	metricsUploaderGRPC *metricsuploader.MetricsUploaderGRPC
-	config              config.Config
+	loader MetricUploader
+	config config.Config
 }
 
 func NewHTTPClient(config config.Config) *AppHTTP {
 	var app AppHTTP
 	app.config = config
-	app.metricsUplader = metricsuploader.NewMetricsUploader(app.config.HTTPClientConnection, app.config.SignKey, app.config.PublicKeyRSA)
+	app.loader.metricsUplader = metricsuploader.NewMetricsUploader(app.config.HTTPClientConnection, app.config.SignKey, app.config.PublicKeyRSA)
 
 	if config.ServerGRPCAddr != "" {
 		var err error
-		app.metricsUploaderGRPC, err = metricsuploader.NewMetricsUploaderGRPC(app.config.ServerGRPCAddr)
+		app.loader.metricsUploaderGRPC, err = metricsuploader.NewMetricsUploaderGRPC(app.config.ServerGRPCAddr)
 
 		if err != nil {
 			log.Fatal(err)
@@ -41,14 +49,14 @@ func NewHTTPClient(config config.Config) *AppHTTP {
 	return &app
 }
 
-func uploadMetrics(ctx context.Context, app *AppHTTP, metricsDump *statsreader.MetricsDump, wgRefresh *sync.WaitGroup) {
+func (m *MetricUploader) uploadMetrics(ctx context.Context, metricsDump *statsreader.MetricsDump, wgRefresh *sync.WaitGroup) {
 	wgRefresh.Wait()
 	go func() {
-		if app.metricsUploaderGRPC != nil {
-			log.Println(app.metricsUploaderGRPC.Upload(ctx, *metricsDump))
+		if m.metricsUploaderGRPC != nil {
+			log.Println(m.metricsUploaderGRPC.Upload(ctx, *metricsDump))
 			return
 		}
-		err := app.metricsUplader.MetricsUploadBatch(*metricsDump)
+		err := m.metricsUplader.MetricsUploadBatch(*metricsDump)
 		if err != nil {
 			log.Println(err)
 		}
@@ -102,14 +110,14 @@ func (app *AppHTTP) Run(ctx context.Context) {
 
 			for i := 0; i < workers; i++ {
 				go func() {
-					err = app.metricsUplader.MetricsUploadBatch(*metricsDump)
+					err = app.loader.metricsUplader.MetricsUploadBatch(*metricsDump)
 					if err != nil {
 						log.Println("cant upload metrics ", err)
 					}
 				}()
 			}
 		case <-ctx.Done():
-			uploadMetrics(ctx, app, metricsDump, &wgRefresh)
+			app.loader.uploadMetrics(ctx, metricsDump, &wgRefresh)
 			wgRefresh.Wait()
 			app.Stop()
 		}
