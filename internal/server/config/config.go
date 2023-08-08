@@ -28,6 +28,8 @@ type Config struct {
 	ServerAddr string `env:"ADDRESS" json:"address,omitempty"`
 	// ProfilingAddr -  адрес WEB сервера профилировщика, не работает если пустое значение (flag: pa; default: 127.0.0.1:8090)
 	ProfilingAddr string `env:"PROF_ADDRESS" json:"profiling_addr,omitempty"`
+	// TrustedSubNet - строковое представление доверенной сети
+	TrustedSubNet string `env:"TRUSTED_SUBNET" json:"trusted_subnet,omitempty"`
 	// TemplatesAbsPath - абсолютный путь до шаблонов HTML (default: ./templates)
 	TemplatesAbsPath string `env:"TEMPLATES_ABS_PATH" json:"templates_abs_path,omitempty"`
 	// PrivateKeyRSA - приватный RSA ключ (flag: crypto-key)
@@ -99,6 +101,7 @@ func (config *Config) parseEnv() error {
 func (config *Config) parseFlags() {
 	flag.StringVar(&config.ServerAddr, "a", config.ServerAddr, "server address (host:port)")
 	flag.StringVar(&config.PrivateKeyRSA, "crypto-key", config.PrivateKeyRSA, "RSA private key")
+	flag.StringVar(&config.TrustedSubNet, "t", config.TrustedSubNet, "trusted subnet")
 	flag.StringVar(&config.SignKey, "k", config.SignKey, "sign key")
 	flag.BoolVar(&config.DebugMode, "debug", config.DebugMode, "debug mode")
 	flag.BoolVar(&config.Store.Restore, "r", config.Store.Restore, "restoring metrics from file")

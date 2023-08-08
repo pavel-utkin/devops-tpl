@@ -83,6 +83,11 @@ func (server *Server) initRouter() {
 		router.Use(RSAHandle)
 	}
 
+	if server.config.TrustedSubNet != "" {
+		SubNetHandle := middleware.NewSubNetHandle(server.config.TrustedSubNet)
+		router.Use(SubNetHandle)
+	}
+
 	router.Get("/", server.PrintAllMetricStatic)
 	router.Get("/ping", server.PingGetJSON)
 	router.Get("/value/{statType}/{statName}", server.PrintMetricGet)
