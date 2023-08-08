@@ -46,6 +46,10 @@ func (repository DBRepo) PrepareDB() {
 	repository.db.SetConnMaxLifetime(time.Minute * 2)
 }
 
+func (repository DBRepo) DB() *sql.DB {
+	return repository.db
+}
+
 func (repository DBRepo) InitTables() error {
 	ctx := context.Background()
 	_, err := repository.db.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS counter (id serial, name VARCHAR (128) UNIQUE NOT NULL, value BIGINT NOT NULL)")

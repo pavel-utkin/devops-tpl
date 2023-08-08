@@ -36,6 +36,8 @@ type Config struct {
 	PrivateKeyRSA string `env:"CRYPTO_KEY" json:"crypto_key,omitempty"`
 	// SignKey - ключ для подписи сообщений (flag: k)
 	SignKey string `env:"KEY"  json:"sign_key,omitempty"`
+	// ServerGRPCAddr - адрес gRPC сервера (default: 127.0.0.1:50051)
+	ServerGRPCAddr string `env:"ADDRESS_GRPC" json:"address_grpc,omitempty"`
 	// DebugMode - debug мод (flag: debug; default: false)
 	DebugMode bool `env:"DEBUG"  json:"debug,omitempty"`
 	Store     StoreConfig
@@ -85,6 +87,7 @@ func (config *Config) parseConfig(flagConfigPath, flagConfigPathAlias *string) {
 func (config *Config) initDefaultValues() {
 	config.ServerAddr = "127.0.0.1:8080"
 	config.ProfilingAddr = "127.0.0.1:8090"
+	config.ServerGRPCAddr = "127.0.0.1:50051"
 	config.TemplatesAbsPath = "./templates"
 	config.Store = StoreConfig{
 		Interval: time.Duration(300) * time.Second,
